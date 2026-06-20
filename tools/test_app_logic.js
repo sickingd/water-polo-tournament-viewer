@@ -37,6 +37,7 @@ const sandbox = {
     setItem: (k, v) => store.set(k, String(v)),
     removeItem: (k) => store.delete(k),
   },
+  addEventListener: () => {},
   document: {
     getElementById: (id) => el(id),
     querySelectorAll: () => [],
