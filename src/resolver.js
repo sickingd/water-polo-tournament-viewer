@@ -201,17 +201,24 @@
 
   // --- Resolving a token to a team ---------------------------------------
 
+  // Precedence note: for ref/finish/seed tokens we ALWAYS try to verify independently first
+  // (from the feeder game's actual score, or from our own computed standings) and only fall
+  // back to the sheet's cached "-{TEAM}" suffix when we can't verify it ourselves. The cache
+  // is a downstream formula in the live Google Sheet and can lag behind a just-entered score
+  // by a recalculation cycle -- e.g. a crossover game's winner can show stale in the very next
+  // round's cell for a few minutes. Trusting our own computation first means the app reflects
+  // the real result immediately instead of waiting on the sheet to catch up. (`slot`/`team`
+  // tokens have no independent check to run -- their cached/literal value IS the ground truth.)
   function resolveToken(tok, ctx, depth) {
     depth = depth || 0;
     if (depth > 12) return { team: null, locked: false, hint: 'TBD' };
     if (!tok) return { team: null, locked: false, hint: 'TBD' };
 
-    if (tok.team) return { team: tok.team, locked: true };
-
     switch (tok.type) {
       case 'team':
         return { team: tok.team, locked: true };
       case 'slot':
+        if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: `${tok.let}${tok.pos}` };
       case 'seed': {
         let best = { hint: `${tok.let}${tok.pos}` };
@@ -223,6 +230,7 @@
           // unwrap. Dropping it here silently breaks the matchup expansion one level up.
           if (r.hint) best = r;
         }
+        if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: best.hint, feederGame: best.feederGame };
       }
       case 'finish': {
@@ -230,18 +238,21 @@
         if (g && g.complete && g.ranked[tok.ord - 1]) {
           return { team: g.ranked[tok.ord - 1].name, locked: true };
         }
+        if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: `${ordWord(tok.ord)} of Group ${tok.let}` };
       }
       case 'progress': {
         const feeder = findFeederGame(ctx, tok.ref);
-        if (!feeder) return { team: null, locked: false, hint: `${tok.wl === 'W' ? 'Winner' : 'Loser'} of ${tok.ref}` };
-        return resolveFromGame(feeder, tok.wl, ctx, depth);
+        if (feeder) return resolveFromGame(feeder, tok.wl, ctx, depth);
+        if (tok.team) return { team: tok.team, locked: true };
+        return { team: null, locked: false, hint: `${tok.wl === 'W' ? 'Winner' : 'Loser'} of ${tok.ref}` };
       }
       case 'progressPair': {
         const feeder = findSeedPairGame(ctx, tok.let, tok.a, tok.b);
         const label = `${tok.let}${tok.a}/${tok.let}${tok.b}`;
-        if (!feeder) return { team: null, locked: false, hint: `${tok.wl === 'W' ? 'Winner' : 'Loser'} of ${label}` };
-        return resolveFromGame(feeder, tok.wl, ctx, depth);
+        if (feeder) return resolveFromGame(feeder, tok.wl, ctx, depth);
+        if (tok.team) return { team: tok.team, locked: true };
+        return { team: null, locked: false, hint: `${tok.wl === 'W' ? 'Winner' : 'Loser'} of ${label}` };
       }
       default:
         return { team: null, locked: false, hint: 'TBD' };

@@ -2,3 +2,4 @@
 *.XLSX
 *.xlsx
 tools/tmp/
+.claude/
