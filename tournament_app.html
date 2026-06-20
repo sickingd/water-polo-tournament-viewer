@@ -36,6 +36,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .header-row { display: flex; align-items: flex-start; justify-content: space-between; }
 .pick-btn { background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3); color: white; border-radius: 20px; padding: 5px 13px; font-size: 13px; cursor: pointer; white-space: nowrap; margin-top: 4px; }
 .pick-btn:active { background: rgba(255,255,255,.28); }
+.last-updated { font-size: 11px; opacity: .6; margin-top: 8px; }
 
 /* TABS */
 .tabs { background: white; display: flex; border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 10; }
@@ -196,6 +197,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
       <button class="pick-btn" onclick="openPicker()">Change Team</button>
     </div>
   </div>
+  <div class="last-updated" id="lastUpdated"></div>
 </div>
 
 <!-- TABS -->
@@ -324,7 +326,20 @@ function renderHeader() {
     document.getElementById('favTeamName').textContent = 'Pick Your Team ⭐';
     document.getElementById('favTeamChips').innerHTML = '';
   }
+  renderLastUpdated();
 }
+
+function renderLastUpdated() {
+  const el = document.getElementById('lastUpdated');
+  if (!el || !TD.generated) { if (el) el.textContent = ''; return; }
+  const mins = Math.round((Date.now() - new Date(TD.generated).getTime()) / 60000);
+  let text;
+  if (mins < 1) text = 'Updated just now';
+  else if (mins < 60) text = `Updated ${mins}m ago`;
+  else text = `Updated ${Math.round(mins / 60)}h ago`;
+  el.textContent = text;
+}
+setInterval(renderLastUpdated, 30000);
 
 function divLabel(div) {
   if (!div) return '';

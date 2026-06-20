@@ -43,6 +43,7 @@ const sandbox = {
     querySelectorAll: () => [],
   },
   setTimeout: () => {},
+  setInterval: () => {},
 };
 sandbox.global = sandbox;
 sandbox.globalThis = sandbox;
