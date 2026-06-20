@@ -1,0 +1,51 @@
+name: Refresh tournament data
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check tournament cutoff
+        id: cutoff
+        run: |
+          # 8:00 PM PDT Sunday 2026-06-21
+          cutoff="2026-06-22T03:00:00Z"
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [[ "$now" > "$cutoff" ]]; then
+            echo "Past cutoff ($cutoff UTC) -- skipping refresh."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cutoff.outputs.skip == 'false'
+
+      - uses: actions/setup-python@v5
+        if: steps.cutoff.outputs.skip == 'false'
+        with:
+          python-version: '3.x'
+
+      - name: Refresh data
+        if: steps.cutoff.outputs.skip == 'false'
+        run: python3 tools/refresh_data.py
+
+      - name: Commit and push if changed
+        if: steps.cutoff.outputs.skip == 'false'
+        run: |
+          git config user.name "tournament-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if git diff --quiet -- data/; then
+            echo "No data changes."
+          else
+            git add data/
+            git commit -m "Auto-refresh tournament data"
+            git push
+          fi
