@@ -88,5 +88,25 @@ check('Schedule shows resolved bracket labels, not raw tokens', !scheduleHtml.in
 vm.runInContext("selectTournament('2026-girls-futures-superfinals')", sandbox);
 check('Re-selecting current tournament does not crash', true);
 
+// Final placement banner: no real team has finished mid-tournament yet, so inject a synthetic
+// finished bracket (a single decided "3rd" game) to verify the banner itself renders correctly.
+vm.runInContext(`
+  TD.games.push({ date: '2026-06-21', time: '1:00 PM', location: 'TEST COURT', game_id: 'TESTG01',
+    white: 'TESTWINNER', white_score: 10, dark: 'TESTLOSER', dark_score: 8, round: '3rd',
+    division: 'TEST_DIV', played: true });
+  TD.teams.push({ name: 'TESTWINNER', division: 'TEST_DIV' }, { name: 'TESTLOSER', division: 'TEST_DIV' });
+  resolvedCache = {};
+  selectTeam('TESTWINNER', 'TEST_DIV');
+`, sandbox);
+const winnerHtml = el('myTeamContent').innerHTML;
+check('Finished team (3rd place) shows final-placement banner', winnerHtml.includes('final-placement'));
+check('3rd place gets the top3 trophy styling', winnerHtml.includes('top3') && winnerHtml.includes('🏆'));
+check('3rd place banner shows "3rd"', winnerHtml.includes('3rd'));
+
+vm.runInContext("selectTeam('TESTLOSER', 'TEST_DIV')", sandbox);
+const loserHtml = el('myTeamContent').innerHTML;
+check('4th place shows final-placement banner without trophy styling', loserHtml.includes('final-placement') && !loserHtml.includes('top3') && !loserHtml.includes('🏆'));
+check('4th place banner shows "4th"', loserHtml.includes('4th'));
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

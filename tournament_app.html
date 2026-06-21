@@ -179,6 +179,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .tracker-range.tier-mid { background: var(--blue-light); color: var(--blue); }
 .tracker-range.tier-low { background: var(--gray-light); color: var(--gray); }
 .group-strength { font-size: 11px; color: var(--gray); font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+/* FINAL PLACEMENT BANNER */
+.final-placement { background: linear-gradient(135deg, var(--blue), #0f3d7a); color: white; padding: 22px 16px; text-align: center; }
+.final-placement.top3 { background: linear-gradient(135deg, var(--gold), #b45309); }
+.final-placement-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; opacity: .85; }
+.final-placement-value { font-size: 40px; font-weight: 800; margin-top: 4px; line-height: 1; }
+.final-placement-div { font-size: 13px; opacity: .85; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -389,6 +396,20 @@ function renderMyTeam() {
 
   let html = '';
 
+  // Tournament over for this team -- show their final placement front and center.
+  if (!upcoming.length) {
+    const place = finalPlacementFor(resolved, favTeam);
+    if (place != null) {
+      const isTop3 = place <= 3;
+      const trophy = isTop3 ? ' 🏆' : '';
+      html += `<div class="final-placement ${isTop3 ? 'top3' : ''}">
+        <div class="final-placement-label">Final Result</div>
+        <div class="final-placement-value">${ordWord(place)}${trophy}</div>
+        <div class="final-placement-div">${escapeHtml(divLabel(favDiv))}</div>
+      </div>`;
+    }
+  }
+
   // Record summary
   html += `<div style="background:white;padding:14px 16px;border-bottom:1px solid #e5e7eb;display:flex;gap:0">`;
   html += `<div style="flex:1;text-align:center;border-right:1px solid #e5e7eb"><div style="font-size:28px;font-weight:800;color:#15803d">${wins}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Wins</div></div>`;
@@ -531,7 +552,20 @@ function finalPlacementFor(resolved, teamName) {
     if (winner === teamName) place = n;
     else if (loser === teamName) place = n + 1;
   });
-  return place;
+  if (place != null) return place;
+
+  // Placement round-robins (e.g. "17-20 RR", "21-24 RR") don't have one deciding game --
+  // the final rank comes from that mini-bracket's own standings once every game in it is
+  // done. resolved.standings already ranks these the same way as pool groups.
+  for (const let_ of Object.keys(resolved.standings)) {
+    const group = resolved.standings[let_];
+    if (!group.complete || !group.games.length) continue;
+    const idx = group.ranked.findIndex((r) => r.name === teamName);
+    if (idx === -1) continue;
+    const rangeMatch = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec((group.games[0].raw.round || '').trim());
+    if (rangeMatch) return parseInt(rangeMatch[1], 10) + idx;
+  }
+  return null;
 }
 
 // A team's overall record so far this event -- computed directly from their own final
