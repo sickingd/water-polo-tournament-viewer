@@ -50,5 +50,21 @@ assertEqual(scenario.tree.onWin.opponent, 'PATRIOT', 'Regency win-branch opponen
 assertEqual(scenario.floor, 12, 'Regency floor (2ndB top-group runner-up = 1st-12th)');
 assertEqual(scenario.ceiling, 1, 'Regency ceiling (2ndB top-group runner-up = 1st-12th)');
 
+// Regression test: a genuine 3-way cyclic tie (A beats B, B beats C, C beats A -- all three
+// finish 1-1, not a data error) must NOT be resolved via pairwise head-to-head, which cycles
+// and produces a sort-order-dependent (i.e. wrong) result. It should fall through to goal
+// differential for the whole tied group instead. This is exactly what happened with
+// Meridian/Norco/San Diego Shores in 16U_GIRLS_D1 Group E on 2026-06-21.
+const cyclicTieGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99GD901', white: 'E1-MERIDIAN', white_score: 8, dark: 'E3-NORCO', dark_score: 9, round: 'E bracket E1,E3', division: '16U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '9:00 AM', location: 'X', game_id: '99GD902', white: 'E2-SAN DIEGO SHORES', white_score: 12, dark: 'E3-NORCO', dark_score: 10, round: 'E bracket E2,E3', division: '16U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '10:00 AM', location: 'X', game_id: '99GD903', white: 'E1-MERIDIAN', white_score: 9, dark: 'E2-SAN DIEGO SHORES', dark_score: 7, round: 'E bracket E1,E2', division: '16U_GIRLS_D1', played: true },
+];
+const cyclicResult = global.Resolver.resolveDivision(cyclicTieGames);
+const groupE = cyclicResult.standings['E'];
+assertEqual(groupE.ranked[0].name, 'MERIDIAN', 'Cyclic 3-way tie 1st (best GD, not H2H)');
+assertEqual(groupE.ranked[1].name, 'SAN DIEGO SHORES', 'Cyclic 3-way tie 2nd');
+assertEqual(groupE.ranked[2].name, 'NORCO', 'Cyclic 3-way tie 3rd (worst GD, despite beating the 1st-place team)');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

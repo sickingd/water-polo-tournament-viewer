@@ -185,18 +185,37 @@
     return { w: 0, l: 0, t: 0, gf: 0, ga: 0, beat: new Set() };
   }
 
+  // Head-to-head only gives a *consistent* tiebreak for an exact 2-way tie. With 3+ teams
+  // tied on wins, pairwise H2H can cycle (A beat B, B beat C, C beat A all at once -- a real
+  // rock-paper-scissors result, not a bug in the data), and applying it pairwise inside a
+  // single sort comparator produces a non-transitive, sort-order-dependent result. So: group
+  // by win count first, and only consult H2H within a group of exactly two; any group of 3+
+  // falls straight through to goal differential / goals against for the whole group.
   function rankRecords(records) {
     const entries = Array.from(records.entries()).map(([name, r]) => ({ name, ...r }));
-    entries.sort((a, b) => {
-      if (b.w !== a.w) return b.w - a.w;
-      // 2-way head-to-head
-      if (a.beat.has(b.name) && !b.beat.has(a.name)) return -1;
-      if (b.beat.has(a.name) && !a.beat.has(b.name)) return 1;
+    const byWins = new Map();
+    entries.forEach((e) => {
+      if (!byWins.has(e.w)) byWins.set(e.w, []);
+      byWins.get(e.w).push(e);
+    });
+    const byGoalDiff = (a, b) => {
       const gdA = a.gf - a.ga, gdB = b.gf - b.ga;
       if (gdB !== gdA) return gdB - gdA;
       return a.ga - b.ga;
+    };
+    const ranked = [];
+    Array.from(byWins.keys()).sort((a, b) => b - a).forEach((w) => {
+      const group = byWins.get(w);
+      if (group.length === 2) {
+        const [a, b] = group;
+        if (a.beat.has(b.name) && !b.beat.has(a.name)) { ranked.push(a, b); return; }
+        if (b.beat.has(a.name) && !a.beat.has(b.name)) { ranked.push(b, a); return; }
+        // Neither beat the other decisively (tie/no result yet) -- fall through to GD/GA.
+      }
+      group.sort(byGoalDiff);
+      ranked.push(...group);
     });
-    return entries;
+    return ranked;
   }
 
   // --- Resolving a token to a team ---------------------------------------
