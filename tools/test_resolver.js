@@ -99,5 +99,20 @@ const truncatedResult = global.Resolver.resolveDivision(truncatedNameGames);
 const qf2Repro = truncatedResult.games.find((g) => g.game_id === '99GD911');
 assertEqual(qf2Repro.whiteTeam, 'SANTA BARBARA A', 'Truncated cached "1stA-SANTA BARBARA" repaired to the real team "SANTA BARBARA A"');
 
+// Regression test: a shootout-decided tie is recorded as e.g. "5.3" vs "5.1" (5 goals each in
+// regulation, decided 3-1 in the shootout). The decimal must still decide the winner, but
+// shootout goals are not real goals -- goal differential should be 0, not +0.2.
+const shootoutGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99GD912', white: 'Y1-TEAM ONE', white_score: 5.3, dark: 'Y2-TEAM TWO', dark_score: 5.1, round: 'Y bracket Y1,Y2', division: '16U_GIRLS_D1', played: true },
+];
+const shootoutResult = global.Resolver.resolveDivision(shootoutGames);
+const groupY = shootoutResult.standings['Y'];
+const teamOne = groupY.ranked.find((r) => r.name === 'TEAM ONE');
+const teamTwo = groupY.ranked.find((r) => r.name === 'TEAM TWO');
+assertEqual(teamOne.w, 1, 'Shootout winner (5.3 over 5.1) still credited the win');
+assertEqual(teamOne.gf - teamOne.ga, 0, 'Shootout goals excluded from goal differential (5-5, not 5.3-5.1)');
+assertEqual(teamTwo.l, 1, 'Shootout loser (5.1) credited the loss');
+assertEqual(teamTwo.gf - teamTwo.ga, 0, 'Shootout loser also shows 0 goal differential, not -0.2');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

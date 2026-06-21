@@ -57,6 +57,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .game-card.fav-game { border-left: 4px solid var(--blue); padding-left: 12px; }
 
 .game-time-col { text-align: center; min-width: 54px; }
+.game-number { font-size: 10px; font-weight: 700; color: var(--gray); letter-spacing: .02em; }
 .game-time { font-size: 14px; font-weight: 600; color: var(--blue); }
 .game-loc { font-size: 10px; color: var(--text-2); margin-top: 2px; line-height: 1.3; }
 .game-loc-abbr { font-weight: 500; }
@@ -627,12 +628,31 @@ function recordFor(resolved, teamName) {
     any = true;
     const myScore = iAmWhite ? g.white_score : g.dark_score;
     const oppScore = iAmWhite ? g.dark_score : g.white_score;
-    record.gf += myScore; record.ga += oppScore;
+    // A shootout-decided tie is recorded as e.g. 5.3 vs 5.1 (5 goals + 3/1 in the shootout).
+    // The decimal correctly decides the winner, but shootout goals aren't real goals -- only
+    // count the whole-number part toward goal differential.
+    record.gf += Math.trunc(myScore); record.ga += Math.trunc(oppScore);
     if (myScore > oppScore) record.w++;
     else if (myScore < oppScore) record.l++;
     else record.t++;
   });
   return any ? record : null;
+}
+
+// A team's "seed" proxy, used only to break ties among teams whose projected placement range
+// is otherwise identical -- their group + position in their very first (round-robin) slot
+// assignment, e.g. "A1" ranks above "A2" which ranks above "B1". This is the actual initial
+// seeding order in every division observed (groups assigned strongest-to-weakest, positions
+// within a group assigned top-seed-first), and unlike a hardcoded seed-number table it works
+// for any division size since it's read directly off each division's own slot tokens.
+function seedKeyFor(resolved, teamName) {
+  for (const g of resolved.games) {
+    const wm = /^([A-Za-z]+)(\d+)-/.exec(g.white || '');
+    if (wm && g.whiteTeam === teamName) return wm[1].toUpperCase().charCodeAt(0) * 100 + parseInt(wm[2], 10);
+    const dm = /^([A-Za-z]+)(\d+)-/.exec(g.dark || '');
+    if (dm && g.darkTeam === teamName) return dm[1].toUpperCase().charCodeAt(0) * 100 + parseInt(dm[2], 10);
+  }
+  return null;
 }
 
 function placementTrackerHTML(resolved, division) {
@@ -652,19 +672,26 @@ function placementTrackerHTML(resolved, division) {
     // string can be multiple levels deep (e.g. "Winner of Playin1 (CLOVIS vs Winner of
     // Cross3 (680 vs ROSE BOWL))"); strip the matchup detail and keep just the top label.
     const nextOpponent = scenario ? (scenario.tree.opponent || '').replace(/\s\(.*\)$/, '') : null;
-    return { name: t.name, record, floor, ceiling, nextOpponent };
+    const seedKey = seedKeyFor(resolved, t.name);
+    return { name: t.name, record, floor, ceiling, nextOpponent, seedKey };
   });
 
+  // Ranked by expected finishing place (ceiling, then floor) -- before the tournament starts
+  // this is just the seeding, since every team's range is still its full possible spread.
+  // When two teams project to the exact same range, that's not a real-performance tiebreak;
+  // fall back to their initial seed (group + position) rather than current win count.
   rows.sort((a, b) => {
     const ac = a.ceiling == null ? 999 : a.ceiling, bc = b.ceiling == null ? 999 : b.ceiling;
     if (ac !== bc) return ac - bc;
-    const aw = a.record ? a.record.w : 0, bw = b.record ? b.record.w : 0;
-    return bw - aw;
+    const af = a.floor == null ? 999 : a.floor, bf = b.floor == null ? 999 : b.floor;
+    if (af !== bf) return af - bf;
+    const ak = a.seedKey == null ? 999999 : a.seedKey, bk = b.seedKey == null ? 999999 : b.seedKey;
+    return ak - bk;
   });
 
   let html = `<div class="tracker-card">
     <div class="tracker-header">${escapeHtml(divLabel(division))} — Placement Tracker</div>`;
-  rows.forEach((r) => {
+  rows.forEach((r, i) => {
     const isFav = favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
     const recordStr = r.record ? `${r.record.w}-${r.record.l}${r.record.t ? '-' + r.record.t : ''}` : '—';
     const gd = r.record ? r.record.gf - r.record.ga : null;
@@ -679,7 +706,7 @@ function placementTrackerHTML(resolved, division) {
       tier = 'tier-low';
     }
     html += `<div class="tracker-row ${isFav ? 'my-team' : ''}">
-      <div class="tracker-name">${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}${r.nextOpponent ? ` <span class="tracker-next">(vs ${escapeHtml(r.nextOpponent)})</span>` : ''}</div>
+      <div class="tracker-name"><span class="rank-num">${i + 1}</span>${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}${r.nextOpponent ? ` <span class="tracker-next">(vs ${escapeHtml(r.nextOpponent)})</span>` : ''}</div>
       <div class="tracker-record">${recordStr}</div>
       <div class="tracker-gd" style="color:${gdColor}">${gdStr}</div>
       <div class="tracker-range ${tier}">${rangeStr}</div>
@@ -759,6 +786,7 @@ function gameCardHTML(g, myTeam) {
 
   return `<div class="game-card ${isFavGame ? 'fav-game' : ''}" data-game-id="${escapeAttr(g.game_id)}">
     <div class="game-time-col">
+      <div class="game-number">${escapeHtml(g.game_id)}</div>
       <div class="game-time">${g.time.replace(' AM', 'a').replace(' PM', 'p')}</div>
       <div class="game-loc"><span class="game-loc-abbr">${loc}</span></div>
     </div>
@@ -945,7 +973,10 @@ function selectBracket(div) {
   viewingDivision = div;
   localStorage.setItem('viewingDivision', div);
   closeBracketPicker();
-  renderStandings();
+  // The bracket picker is shared by both the Bracket tab and the Tournament tab -- refresh
+  // whichever one is actually on screen, not always the Bracket tab.
+  if (activeTab === 'standings') renderStandings();
+  if (activeTab === 'schedule') renderSchedule();
 }
 
 // --- Helpers ---

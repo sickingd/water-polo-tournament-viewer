@@ -165,8 +165,12 @@
       if (isNaN(ws) || isNaN(ds) || !whiteName || !darkName) return;
       const wr = g.records.get(whiteName);
       const dr = g.records.get(darkName);
-      wr.gf += ws; wr.ga += ds;
-      dr.gf += ds; dr.ga += ws;
+      // A shootout-decided tie is recorded as e.g. 5.3 vs 5.1 (5 goals + 3/1 in the
+      // shootout). The decimal correctly decides the winner below, but shootout goals
+      // aren't real goals -- only the whole-number part counts toward goal differential.
+      const wGoals = Math.trunc(ws), dGoals = Math.trunc(ds);
+      wr.gf += wGoals; wr.ga += dGoals;
+      dr.gf += dGoals; dr.ga += wGoals;
       if (ws > ds) { wr.w++; dr.l++; wr.beat.add(darkName); }
       else if (ds > ws) { dr.w++; wr.l++; dr.beat.add(whiteName); }
       else { wr.t++; dr.t++; }

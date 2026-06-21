@@ -132,5 +132,23 @@ const loserHtml = el('myTeamContent').innerHTML;
 check('4th place shows final-placement banner without trophy styling', loserHtml.includes('final-placement') && !loserHtml.includes('top3') && !loserHtml.includes('🏆'));
 check('4th place banner shows "4th"', loserHtml.includes('4th'));
 
+// Game# should be visibly shown on each game card (not just available as a data attribute).
+vm.runInContext("selectTeam('REGENCY', '16U_GIRLS_D1'); showTab('standings');", sandbox);
+const bracketHtmlForGameNum = el('standingsContent').innerHTML;
+check('Bracket tab visibly shows the Game# on each card', /class="game-number">16GD1\d+</.test(bracketHtmlForGameNum));
+
+// Placement Tracker rows should be numbered by rank.
+vm.runInContext("showTab('schedule')", sandbox);
+const trackerHtmlForRank = el('scheduleContent').innerHTML;
+check('Placement Tracker rows show a rank number', /class="tracker-name"><span class="rank-num">1<\/span>/.test(trackerHtmlForRank));
+
+// selectBracket must refresh whichever tab is currently active, not always the Bracket tab --
+// previously switching brackets while on the Tournament tab left scheduleContent stale until
+// you navigated away and back.
+vm.runInContext("selectBracket('18U_GIRLS_D1')", sandbox);
+check('selectBracket refreshes the Tournament tab immediately when it is active', el('scheduleContent').innerHTML.includes('18U'));
+vm.runInContext("selectBracket('16U_GIRLS_D1'); showTab('standings'); selectBracket('18U_GIRLS_D1');", sandbox);
+check('selectBracket refreshes the Bracket tab immediately when it is active', el('standingsContent').innerHTML.includes('18U'));
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
