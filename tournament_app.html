@@ -186,6 +186,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .final-placement-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; opacity: .85; }
 .final-placement-value { font-size: 40px; font-weight: 800; margin-top: 4px; line-height: 1; }
 .final-placement-div { font-size: 13px; opacity: .85; margin-top: 4px; }
+
+/* BRACKET SWITCHER (Bracket tab) */
+.viewing-bar { background: white; padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.viewing-bar-label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 4px; }
+.viewing-bar-value { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700; color: var(--text); }
+.viewing-switch-btn { background: var(--blue-light); color: var(--blue); border: none; border-radius: 16px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.viewing-switch-btn:active { background: #d6e4f7; }
+
+/* COLLAPSIBLE BRACKET SECTIONS (Tournament tab) */
+.tournament-section-title { padding: 14px 16px 6px; font-size: 13px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; }
+.bracket-section { background: white; border-bottom: 1px solid var(--border); }
+.bracket-section-header { padding: 12px 16px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.bracket-section-header:active { background: var(--gray-light); }
+.bracket-section-header .chevron { margin-left: auto; color: var(--gray); font-size: 12px; transition: transform .15s; }
+.bracket-section.expanded .bracket-section-header .chevron { transform: rotate(90deg); }
+.bracket-section-body { display: none; }
+.bracket-section.expanded .bracket-section-body { display: block; }
+.bracket-section-count { font-size: 12px; color: var(--gray); font-weight: 400; }
 </style>
 </head>
 <body>
@@ -210,8 +228,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <!-- TABS -->
 <div class="tabs">
   <div class="tab active" onclick="showTab('myTeam')" id="tab-myTeam">My Team</div>
-  <div class="tab" onclick="showTab('standings')" id="tab-standings">Standings</div>
-  <div class="tab" onclick="showTab('schedule')" id="tab-schedule">Full Schedule</div>
+  <div class="tab" onclick="showTab('standings')" id="tab-standings">Bracket</div>
+  <div class="tab" onclick="showTab('schedule')" id="tab-schedule">Tournament</div>
 </div>
 
 <!-- CONTENT -->
@@ -253,6 +271,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   </div>
 </div>
 
+<!-- BRACKET PICKER -->
+<div class="picker-overlay" id="bracketPickerOverlay" onclick="closeBracketPicker(event)">
+  <div class="picker-sheet" id="bracketPickerSheet">
+    <div class="picker-handle"></div>
+    <div class="picker-title">Choose Bracket</div>
+    <div class="picker-list" id="bracketPickerList"></div>
+  </div>
+</div>
+
 <script src="src/resolver.js"></script>
 <script src="data/manifest.js"></script>
 <script src="data/2026-girls-futures-superfinals.js"></script>
@@ -285,6 +312,17 @@ if (favTeam && !TD.teams.some((t) => t.name === favTeam && t.division === favDiv
   favDiv = null;
 }
 
+function allDivisions() {
+  return Array.from(new Set(TD.teams.map((t) => t.division))).sort();
+}
+
+// The bracket being viewed on the "Bracket" tab -- independent of favDiv, since you should be
+// able to browse any division without owning a team in it. Defaults to your own division.
+let viewingDivision = localStorage.getItem('viewingDivision') || favDiv || null;
+if (!viewingDivision || !allDivisions().includes(viewingDivision)) {
+  viewingDivision = favDiv || allDivisions()[0] || null;
+}
+
 // --- Init ---
 renderHeader();
 renderMyTeam();
@@ -298,6 +336,7 @@ function showTab(tab) {
   document.getElementById('tab-' + tab).classList.add('active');
   document.getElementById('sec-' + tab).classList.add('active');
   if (tab === 'standings') renderStandings();
+  if (tab === 'schedule') renderSchedule();
 }
 
 // --- Escaping helpers (data is sheet-sourced, but cheap insurance against odd characters) ---
@@ -503,30 +542,36 @@ function scenarioBranchHTML(node) {
 // --- Standings: per-group tables + division-wide Placement Tracker ---
 function renderStandings() {
   const el = document.getElementById('standingsContent');
-  if (!favTeam) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">📊</div><div class="empty-msg">Pick a team to see standings</div></div>`;
+  if (!viewingDivision) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📊</div><div class="empty-msg">No bracket data available</div></div>`;
     return;
   }
 
-  const resolved = getResolved(favDiv);
-  let html = '';
+  const resolved = getResolved(viewingDivision);
+  let html = `<div class="viewing-bar">
+    <div>
+      <div class="viewing-bar-label">Viewing Bracket</div>
+      <div class="viewing-bar-value">${ageChipHTML(viewingDivision)} <span>${escapeHtml(divLabel(viewingDivision))}</span></div>
+    </div>
+    <button class="viewing-switch-btn" onclick="openBracketPicker()">Change Bracket</button>
+  </div>`;
 
   Object.keys(resolved.standings).sort().forEach((let_) => {
-    html += groupTableHTML(let_, resolved.standings[let_]);
+    html += groupTableHTML(let_, resolved.standings[let_], viewingDivision);
   });
 
-  html += placementTrackerHTML(resolved);
+  html += placementTrackerHTML(resolved, viewingDivision);
 
   el.innerHTML = html || `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-msg">No results yet in this division</div></div>`;
 }
 
-function groupTableHTML(let_, g) {
+function groupTableHTML(let_, g, division) {
   let html = `<div class="standings-card">
     <div class="standings-header">Group ${escapeHtml(let_)}${g.complete ? '' : ' <span class="group-strength">(in progress)</span>'}</div>
     <table class="standings-table">
       <thead><tr><th style="width:44%">Team</th><th>W</th><th>L</th><th>T</th><th>GD</th></tr></thead><tbody>`;
   g.ranked.forEach((r, i) => {
-    const isFav = r.name.toUpperCase() === (favTeam || '').toUpperCase();
+    const isFav = favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
     const gd = r.gf - r.ga;
     const gdStr = gd > 0 ? '+' + gd : gd;
     html += `<tr class="${isFav ? 'my-team' : ''}">
@@ -592,8 +637,8 @@ function recordFor(resolved, teamName) {
   return any ? record : null;
 }
 
-function placementTrackerHTML(resolved) {
-  const divTeams = (TD.teams || []).filter((t) => t.division === favDiv);
+function placementTrackerHTML(resolved, division) {
+  const divTeams = (TD.teams || []).filter((t) => t.division === division);
   if (!divTeams.length) return '';
 
   const rows = divTeams.map((t) => {
@@ -616,9 +661,9 @@ function placementTrackerHTML(resolved) {
   });
 
   let html = `<div class="tracker-card">
-    <div class="tracker-header">${escapeHtml(divLabel(favDiv))} — Placement Tracker</div>`;
+    <div class="tracker-header">${escapeHtml(divLabel(division))} — Placement Tracker</div>`;
   rows.forEach((r) => {
-    const isFav = r.name.toUpperCase() === (favTeam || '').toUpperCase();
+    const isFav = favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
     const recordStr = r.record ? `${r.record.w}-${r.record.l}${r.record.t ? '-' + r.record.t : ''}` : '—';
     let rangeStr, tier;
     if (r.floor != null && r.ceiling != null) {
@@ -639,25 +684,56 @@ function placementTrackerHTML(resolved) {
 }
 
 // --- Full Schedule ---
+// A collapsible block for one division, used by both the Final Placements and Full
+// Schedule sections below -- the favorite team's division starts expanded, every other
+// division starts collapsed (keeps the favorite-team focus even in the tournament-wide view).
+function collapsibleSectionHTML(division, bodyHtml, countLabel) {
+  const isFav = division === favDiv;
+  return `<div class="bracket-section ${isFav ? 'expanded' : ''}">
+    <div class="bracket-section-header" onclick="toggleBracketSection(this)">
+      ${ageChipHTML(division)} <span>${escapeHtml(divLabel(division))}</span>
+      ${countLabel ? `<span class="bracket-section-count">${escapeHtml(countLabel)}</span>` : ''}
+      <span class="chevron">▸</span>
+    </div>
+    <div class="bracket-section-body">${bodyHtml}</div>
+  </div>`;
+}
+function toggleBracketSection(headerEl) {
+  headerEl.parentElement.classList.toggle('expanded');
+}
+
 function renderSchedule() {
   const el = document.getElementById('scheduleContent');
-  const divisions = Array.from(new Set(TD.games.map(g => g.division)));
-  let games = [];
-  divisions.forEach((div) => { games = games.concat(getResolved(div).games); });
-  games.sort((a, b) => gameTS(a).localeCompare(gameTS(b)));
+  const divisions = allDivisions();
 
-  const byDate = {};
-  games.forEach(g => {
-    if (!byDate[g.date]) byDate[g.date] = [];
-    byDate[g.date].push(g);
+  let html = '<div class="tournament-section-title">🏆 Final Placements</div>';
+  divisions.forEach((div) => {
+    const tracker = placementTrackerHTML(getResolved(div), div);
+    html += collapsibleSectionHTML(div, tracker || `<div class="empty"><div class="empty-msg" style="margin-top:0;padding:16px">No results yet</div></div>`, null);
   });
 
-  let html = `<div style="background:white;padding:10px 16px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${games.length} total games across all divisions</div>`;
-
-  for (const [date, dGames] of Object.entries(byDate)) {
-    html += `<div class="date-header">${formatDate(date)} (${dGames.length} games)</div>`;
-    dGames.forEach(g => { html += gameCardHTML(g, favTeam); });
-  }
+  html += '<div class="tournament-section-title">📅 Full Schedule</div>';
+  divisions.forEach((div) => {
+    // Within a bracket, Game# reflects the bracket's own logical flow (pool play, then
+    // crossovers, then placement rounds); wall-clock time interleaves divisions/courts and
+    // isn't a meaningful order once you're looking at just one bracket.
+    const games = [...getResolved(div).games].sort((a, b) => {
+      const an = Resolver.localNumber(a.game_id), bn = Resolver.localNumber(b.game_id);
+      if (an != null && bn != null) return an - bn;
+      return gameTS(a).localeCompare(gameTS(b));
+    });
+    const byDate = {};
+    games.forEach((g) => {
+      if (!byDate[g.date]) byDate[g.date] = [];
+      byDate[g.date].push(g);
+    });
+    let body = '';
+    for (const [date, dGames] of Object.entries(byDate)) {
+      body += `<div class="date-header">${formatDate(date)}</div>`;
+      dGames.forEach((g) => { body += gameCardHTML(g, favTeam); });
+    }
+    html += collapsibleSectionHTML(div, body, `${games.length} games`);
+  });
 
   el.innerHTML = html;
 }
@@ -691,7 +767,7 @@ function gameCardHTML(g, myTeam) {
   const whiteLabel = g.whiteLabel || g.white || '—';
   const darkLabel = g.darkLabel || g.dark || '—';
 
-  return `<div class="game-card ${isFavGame ? 'fav-game' : ''}">
+  return `<div class="game-card ${isFavGame ? 'fav-game' : ''}" data-game-id="${escapeAttr(g.game_id)}">
     <div class="game-time-col">
       <div class="game-time">${g.time.replace(' AM', 'a').replace(' PM', 'p')}</div>
       <div class="game-loc"><span class="game-loc-abbr">${loc}</span></div>
@@ -779,12 +855,15 @@ function selectTeamFromEl(el) {
 function selectTeam(name, div) {
   favTeam = name;
   favDiv  = div;
+  viewingDivision = div;
   localStorage.setItem('favTeam', name);
   localStorage.setItem('favDiv', div);
+  localStorage.setItem('viewingDivision', div);
   closePickerForce();
   renderHeader();
   renderMyTeam();
   if (activeTab === 'standings') renderStandings();
+  if (activeTab === 'schedule') renderSchedule();
 }
 
 // --- Tournament Picker ---
@@ -837,11 +916,46 @@ function selectTournament(id) {
     localStorage.removeItem('favTeam');
     localStorage.removeItem('favDiv');
   }
+  viewingDivision = favDiv || allDivisions()[0] || null;
+  if (viewingDivision) localStorage.setItem('viewingDivision', viewingDivision);
   closeTourneyPicker();
   renderHeader();
   renderMyTeam();
   renderSchedule();
   if (activeTab === 'standings') renderStandings();
+}
+
+// --- Bracket Picker ---
+function openBracketPicker() {
+  renderBracketPickerList();
+  document.getElementById('bracketPickerOverlay').classList.add('open');
+  adjustPickerSheetHeights();
+}
+function closeBracketPicker(e) {
+  if (!e || e.target === document.getElementById('bracketPickerOverlay')) {
+    document.getElementById('bracketPickerOverlay').classList.remove('open');
+  }
+}
+function renderBracketPickerList() {
+  let html = '';
+  allDivisions().forEach((div) => { html += bracketItemHTML(div); });
+  document.getElementById('bracketPickerList').innerHTML = html || `<div class="empty"><div class="empty-msg" style="margin-top:40px">No brackets found</div></div>`;
+}
+function bracketItemHTML(div) {
+  const sel = div === viewingDivision;
+  return `<div class="picker-item ${sel ? 'selected' : ''}" data-div="${escapeAttr(div)}" onclick="selectBracketFromEl(this)">
+    <div class="picker-item-name">${ageChipHTML(div)} <span style="margin-left:6px">${escapeHtml(divLabel(div))}</span>${div === favDiv ? ' <span class="div-chip">MY TEAM</span>' : ''}</div>
+    ${sel ? '<span class="star-icon">⭐</span>' : ''}
+  </div>`;
+}
+function selectBracketFromEl(el) {
+  selectBracket(el.dataset.div);
+}
+function selectBracket(div) {
+  viewingDivision = div;
+  localStorage.setItem('viewingDivision', div);
+  closeBracketPicker();
+  renderStandings();
 }
 
 // --- Helpers ---

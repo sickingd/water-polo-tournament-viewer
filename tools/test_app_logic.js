@@ -75,14 +75,37 @@ check('My Team scenario shows a best/worst case range', myTeamHtml.includes('Bes
 
 vm.runInContext("showTab('standings')", sandbox);
 const standingsHtml = el('standingsContent').innerHTML;
+check('Bracket tab shows the viewing bar for the favorite division', standingsHtml.includes('Viewing Bracket') && standingsHtml.includes('16U'));
 check('Standings renders group tables', standingsHtml.includes('Group B'));
 check('Standings shows Placement Tracker', standingsHtml.includes('Placement Tracker'));
 check('Standings tracker has a tier class', /tier-(gold|mid|low)/.test(standingsHtml));
 
+// Bracket switcher: viewing a division your favorite team isn't in should work standalone.
+vm.runInContext("selectBracket('18U_GIRLS_D1')", sandbox);
+const otherBracketHtml = el('standingsContent').innerHTML;
+check('Switching bracket away from favDiv still renders groups', otherBracketHtml.includes('standings-card'));
+check('Switching bracket away from favDiv shows the new division in the viewing bar', otherBracketHtml.includes('18U'));
+// Re-picking the favorite team should snap the bracket view back to their division.
+vm.runInContext("selectTeam('REGENCY', '16U_GIRLS_D1')", sandbox);
+vm.runInContext("showTab('standings')", sandbox);
+check('Re-selecting favorite team resets viewingDivision', el('standingsContent').innerHTML.includes('16U'));
+
 vm.runInContext("showTab('schedule')", sandbox);
 const scheduleHtml = el('scheduleContent').innerHTML;
-check('Schedule renders total game count', /\d+ total games/.test(scheduleHtml));
-check('Schedule shows resolved bracket labels, not raw tokens', !scheduleHtml.includes('>W#') );
+check('Schedule shows resolved bracket labels, not raw tokens', !scheduleHtml.includes('>W#'));
+check('Tournament tab shows a Final Placements section', scheduleHtml.includes('Final Placements'));
+check('Tournament tab shows a Full Schedule section', scheduleHtml.includes('Full Schedule'));
+const bracketSectionCount = (scheduleHtml.match(/class="bracket-section /g) || []).length;
+check('Tournament tab has a bracket-section per division, twice over (placements + schedule)', bracketSectionCount === 16);
+const expandedCount = (scheduleHtml.match(/class="bracket-section expanded"/g) || []).length;
+check('Exactly the favorite division is expanded in each section (2 total)', expandedCount === 2);
+
+// Game# ordering within a division's schedule section, using the data-game-id attribute.
+// "16GD1xx" is 16U_GIRLS_D1; "16GD2xx" (16U_GIRLS_D2) also starts with "16GD" so the division
+// digit must be pinned, or this picks up both divisions' games interleaved.
+const div16GameIds = [...scheduleHtml.matchAll(/data-game-id="(16GD1\d+)"/g)].map((m) => m[1]);
+const sortedCheck = div16GameIds.every((id, i) => i === 0 || sandbox.Resolver.localNumber(div16GameIds[i - 1]) <= sandbox.Resolver.localNumber(id));
+check('16U_GIRLS_D1 games in the schedule are ordered by Game# (localNumber), ascending', sortedCheck && div16GameIds.length > 0);
 
 // Tournament switcher: re-selecting the same (only) tournament should be a no-op, not crash.
 vm.runInContext("selectTournament('2026-girls-futures-superfinals')", sandbox);
