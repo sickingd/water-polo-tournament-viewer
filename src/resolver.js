@@ -220,14 +220,21 @@
 
   // --- Resolving a token to a team ---------------------------------------
 
-  // Precedence note: for ref/finish/seed tokens we ALWAYS try to verify independently first
-  // (from the feeder game's actual score, or from our own computed standings) and only fall
-  // back to the sheet's cached "-{TEAM}" suffix when we can't verify it ourselves. The cache
-  // is a downstream formula in the live Google Sheet and can lag behind a just-entered score
-  // by a recalculation cycle -- e.g. a crossover game's winner can show stale in the very next
-  // round's cell for a few minutes. Trusting our own computation first means the app reflects
-  // the real result immediately instead of waiting on the sheet to catch up. (`slot`/`team`
-  // tokens have no independent check to run -- their cached/literal value IS the ground truth.)
+  // Precedence note -- this differs by token type, deliberately:
+  //
+  // `finish`/`seed` (group-standings placements like "2ndE", or placement seeds wrapping
+  // them) are resolved by OUR tiebreaker rules (head-to-head -> goal diff -> goals against),
+  // which are a documented *assumption* (TOURNAMENT_DATA_SPEC.md section 6) and can be wrong
+  // for a given tournament's actual rules -- e.g. a 3-way tie where we'd guess one order and
+  // the tournament's real rule picks another. The live sheet's cached "-{TEAM}" suffix reflects
+  // whatever the tournament officially decided, so for these it's the master data: prefer it,
+  // and only fall back to our own computed standings when nothing's been resolved yet.
+  //
+  // `progress`/`progressPair` (W#/L# of a specific game) have no such ambiguity -- the winner
+  // of a single final game is just whoever scored more, not a judgment call. There the risk is
+  // staleness, not disagreement: the cached suffix is a downstream formula that can lag a
+  // recalculation cycle behind a just-entered score. So there we verify independently first and
+  // only fall back to the cache when we can't find/verify the feeder game ourselves.
   function resolveToken(tok, ctx, depth) {
     depth = depth || 0;
     if (depth > 12) return { team: null, locked: false, hint: 'TBD' };
@@ -240,6 +247,7 @@
         if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: `${tok.let}${tok.pos}` };
       case 'seed': {
+        if (tok.team) return { team: tok.team, locked: true };
         let best = { hint: `${tok.let}${tok.pos}` };
         for (const src of tok.sources) {
           const r = resolveToken(src, ctx, depth + 1);
@@ -249,15 +257,14 @@
           // unwrap. Dropping it here silently breaks the matchup expansion one level up.
           if (r.hint) best = r;
         }
-        if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: best.hint, feederGame: best.feederGame };
       }
       case 'finish': {
+        if (tok.team) return { team: tok.team, locked: true };
         const g = ctx.standings[tok.let];
         if (g && g.complete && g.ranked[tok.ord - 1]) {
           return { team: g.ranked[tok.ord - 1].name, locked: true };
         }
-        if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: `${ordWord(tok.ord)} of Group ${tok.let}` };
       }
       case 'progress': {

@@ -66,5 +66,22 @@ assertEqual(groupE.ranked[0].name, 'MERIDIAN', 'Cyclic 3-way tie 1st (best GD, n
 assertEqual(groupE.ranked[1].name, 'SAN DIEGO SHORES', 'Cyclic 3-way tie 2nd');
 assertEqual(groupE.ranked[2].name, 'NORCO', 'Cyclic 3-way tie 3rd (worst GD, despite beating the 1st-place team)');
 
+// Regression test: when a bracket cell already has the official cached "-{TEAM}" resolution
+// for a group placement, that must win over our own computed standings, even if they disagree
+// -- our tiebreaker order (head-to-head -> goal diff -> goals against) is a documented
+// assumption and may not match what a given tournament actually uses. Construct a group where
+// our own computation would say "MERIDIAN" is 1st, but the bracket cell referencing 1stF
+// already carries an official "-NORCO" resolution -- NORCO must win.
+const officialOverrideGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99GD904', white: 'F1-MERIDIAN', white_score: 8, dark: 'F3-NORCO', dark_score: 9, round: 'F bracket F1,F3', division: '16U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '9:00 AM', location: 'X', game_id: '99GD905', white: 'F2-SAN DIEGO SHORES', white_score: 12, dark: 'F3-NORCO', dark_score: 10, round: 'F bracket F2,F3', division: '16U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '10:00 AM', location: 'X', game_id: '99GD906', white: 'F1-MERIDIAN', white_score: 9, dark: 'F2-SAN DIEGO SHORES', dark_score: 7, round: 'F bracket F1,F2', division: '16U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '11:00 AM', location: 'X', game_id: '99GD907', white: '1stF-NORCO', white_score: null, dark: 'TBD', dark_score: null, round: 'SomeCross', division: '16U_GIRLS_D1', played: false },
+];
+const officialResult = global.Resolver.resolveDivision(officialOverrideGames);
+assertEqual(officialResult.standings['F'].ranked[0].name, 'MERIDIAN', 'Our own computed standings (unchanged) still say Meridian 1st');
+const overrideGame = officialResult.games.find((g) => g.game_id === '99GD907');
+assertEqual(overrideGame.whiteTeam, 'NORCO', 'Official cached "1stF-NORCO" wins over our own computed 1st place');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
