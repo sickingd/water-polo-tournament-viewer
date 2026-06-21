@@ -172,8 +172,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .tracker-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .tracker-row:last-child { border-bottom: none; }
 .tracker-row.my-team { background: var(--blue-light); }
-.tracker-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tracker-record { font-size: 12px; color: var(--text-2); min-width: 44px; text-align: center; }
+.tracker-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; }
+.tracker-next { font-size: 12px; font-weight: 400; color: var(--text-2); }
+.tracker-record { font-size: 12px; color: var(--text-2); min-width: 40px; text-align: center; }
+.tracker-gd { font-size: 12px; font-weight: 700; min-width: 32px; text-align: center; }
 .tracker-range { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 10px; white-space: nowrap; min-width: 90px; text-align: center; }
 .tracker-range.tier-gold { background: var(--gold-light); color: var(--gold); }
 .tracker-range.tier-mid { background: var(--blue-light); color: var(--blue); }
@@ -193,17 +195,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .viewing-bar-value { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700; color: var(--text); }
 .viewing-switch-btn { background: var(--blue-light); color: var(--blue); border: none; border-radius: 16px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .viewing-switch-btn:active { background: #d6e4f7; }
-
-/* COLLAPSIBLE BRACKET SECTIONS (Tournament tab) */
-.tournament-section-title { padding: 14px 16px 6px; font-size: 13px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; }
-.bracket-section { background: white; border-bottom: 1px solid var(--border); }
-.bracket-section-header { padding: 12px 16px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
-.bracket-section-header:active { background: var(--gray-light); }
-.bracket-section-header .chevron { margin-left: auto; color: var(--gray); font-size: 12px; transition: transform .15s; }
-.bracket-section.expanded .bracket-section-header .chevron { transform: rotate(90deg); }
-.bracket-section-body { display: none; }
-.bracket-section.expanded .bracket-section-body { display: block; }
-.bracket-section-count { font-size: 12px; color: var(--gray); font-weight: 400; }
 </style>
 </head>
 <body>
@@ -540,6 +531,19 @@ function scenarioBranchHTML(node) {
 }
 
 // --- Standings: per-group tables + division-wide Placement Tracker ---
+// Shared bracket-switcher header, used identically at the top of both the Bracket tab and
+// the Tournament tab -- they're two views (raw standings+schedule vs. placement insight) of
+// whichever single bracket is currently selected.
+function viewingBarHTML() {
+  return `<div class="viewing-bar">
+    <div>
+      <div class="viewing-bar-label">Viewing Bracket</div>
+      <div class="viewing-bar-value">${ageChipHTML(viewingDivision)} <span>${escapeHtml(divLabel(viewingDivision))}</span></div>
+    </div>
+    <button class="viewing-switch-btn" onclick="openBracketPicker()">Change Bracket</button>
+  </div>`;
+}
+
 function renderStandings() {
   const el = document.getElementById('standingsContent');
   if (!viewingDivision) {
@@ -548,21 +552,15 @@ function renderStandings() {
   }
 
   const resolved = getResolved(viewingDivision);
-  let html = `<div class="viewing-bar">
-    <div>
-      <div class="viewing-bar-label">Viewing Bracket</div>
-      <div class="viewing-bar-value">${ageChipHTML(viewingDivision)} <span>${escapeHtml(divLabel(viewingDivision))}</span></div>
-    </div>
-    <button class="viewing-switch-btn" onclick="openBracketPicker()">Change Bracket</button>
-  </div>`;
+  let html = viewingBarHTML();
 
   Object.keys(resolved.standings).sort().forEach((let_) => {
     html += groupTableHTML(let_, resolved.standings[let_], viewingDivision);
   });
 
-  html += placementTrackerHTML(resolved, viewingDivision);
+  html += scheduleListHTML(viewingDivision);
 
-  el.innerHTML = html || `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-msg">No results yet in this division</div></div>`;
+  el.innerHTML = html;
 }
 
 function groupTableHTML(let_, g, division) {
@@ -650,7 +648,11 @@ function placementTrackerHTML(resolved, division) {
       const locked = finalPlacementFor(resolved, t.name);
       if (locked != null) { floor = locked; ceiling = locked; }
     }
-    return { name: t.name, record, floor, ceiling };
+    // Short form of the next opponent for this compact list -- the full scenario opponent
+    // string can be multiple levels deep (e.g. "Winner of Playin1 (CLOVIS vs Winner of
+    // Cross3 (680 vs ROSE BOWL))"); strip the matchup detail and keep just the top label.
+    const nextOpponent = scenario ? (scenario.tree.opponent || '').replace(/\s\(.*\)$/, '') : null;
+    return { name: t.name, record, floor, ceiling, nextOpponent };
   });
 
   rows.sort((a, b) => {
@@ -665,6 +667,9 @@ function placementTrackerHTML(resolved, division) {
   rows.forEach((r) => {
     const isFav = favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
     const recordStr = r.record ? `${r.record.w}-${r.record.l}${r.record.t ? '-' + r.record.t : ''}` : '—';
+    const gd = r.record ? r.record.gf - r.record.ga : null;
+    const gdStr = gd == null ? '—' : (gd > 0 ? '+' + gd : String(gd));
+    const gdColor = gd == null ? 'var(--text-2)' : (gd >= 0 ? '#15803d' : '#b91c1c');
     let rangeStr, tier;
     if (r.floor != null && r.ceiling != null) {
       rangeStr = r.floor === r.ceiling ? `Locked: ${ordWord(r.floor)}` : `${ordWord(r.ceiling)}–${ordWord(r.floor)}`;
@@ -674,8 +679,9 @@ function placementTrackerHTML(resolved, division) {
       tier = 'tier-low';
     }
     html += `<div class="tracker-row ${isFav ? 'my-team' : ''}">
-      <div class="tracker-name">${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}</div>
+      <div class="tracker-name">${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}${r.nextOpponent ? ` <span class="tracker-next">(vs ${escapeHtml(r.nextOpponent)})</span>` : ''}</div>
       <div class="tracker-record">${recordStr}</div>
+      <div class="tracker-gd" style="color:${gdColor}">${gdStr}</div>
       <div class="tracker-range ${tier}">${rangeStr}</div>
     </div>`;
   });
@@ -683,57 +689,41 @@ function placementTrackerHTML(resolved, division) {
   return html;
 }
 
-// --- Full Schedule ---
-// A collapsible block for one division, used by both the Final Placements and Full
-// Schedule sections below -- the favorite team's division starts expanded, every other
-// division starts collapsed (keeps the favorite-team focus even in the tournament-wide view).
-function collapsibleSectionHTML(division, bodyHtml, countLabel) {
-  const isFav = division === favDiv;
-  return `<div class="bracket-section ${isFav ? 'expanded' : ''}">
-    <div class="bracket-section-header" onclick="toggleBracketSection(this)">
-      ${ageChipHTML(division)} <span>${escapeHtml(divLabel(division))}</span>
-      ${countLabel ? `<span class="bracket-section-count">${escapeHtml(countLabel)}</span>` : ''}
-      <span class="chevron">▸</span>
-    </div>
-    <div class="bracket-section-body">${bodyHtml}</div>
-  </div>`;
-}
-function toggleBracketSection(headerEl) {
-  headerEl.parentElement.classList.toggle('expanded');
+// --- Bracket schedule (Bracket tab) ---
+// All of one division's games, ordered by Game# (not wall-clock time) -- within a single
+// bracket, Game# reflects that bracket's own logical flow (pool play, then crossovers, then
+// placement rounds), matching how the source spreadsheet's per-division tab lays games out.
+function scheduleListHTML(division) {
+  const games = [...getResolved(division).games].sort((a, b) => {
+    const an = Resolver.localNumber(a.game_id), bn = Resolver.localNumber(b.game_id);
+    if (an != null && bn != null) return an - bn;
+    return gameTS(a).localeCompare(gameTS(b));
+  });
+  const byDate = {};
+  games.forEach((g) => {
+    if (!byDate[g.date]) byDate[g.date] = [];
+    byDate[g.date].push(g);
+  });
+  let html = '';
+  for (const [date, dGames] of Object.entries(byDate)) {
+    html += `<div class="date-header">${formatDate(date)}</div>`;
+    dGames.forEach((g) => { html += gameCardHTML(g, favTeam); });
+  }
+  return html;
 }
 
+// --- Tournament tab: Placement Tracker for the selected bracket ---
 function renderSchedule() {
   const el = document.getElementById('scheduleContent');
-  const divisions = allDivisions();
+  if (!viewingDivision) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🏆</div><div class="empty-msg">No bracket data available</div></div>`;
+    return;
+  }
 
-  let html = '<div class="tournament-section-title">🏆 Final Placements</div>';
-  divisions.forEach((div) => {
-    const tracker = placementTrackerHTML(getResolved(div), div);
-    html += collapsibleSectionHTML(div, tracker || `<div class="empty"><div class="empty-msg" style="margin-top:0;padding:16px">No results yet</div></div>`, null);
-  });
-
-  html += '<div class="tournament-section-title">📅 Full Schedule</div>';
-  divisions.forEach((div) => {
-    // Within a bracket, Game# reflects the bracket's own logical flow (pool play, then
-    // crossovers, then placement rounds); wall-clock time interleaves divisions/courts and
-    // isn't a meaningful order once you're looking at just one bracket.
-    const games = [...getResolved(div).games].sort((a, b) => {
-      const an = Resolver.localNumber(a.game_id), bn = Resolver.localNumber(b.game_id);
-      if (an != null && bn != null) return an - bn;
-      return gameTS(a).localeCompare(gameTS(b));
-    });
-    const byDate = {};
-    games.forEach((g) => {
-      if (!byDate[g.date]) byDate[g.date] = [];
-      byDate[g.date].push(g);
-    });
-    let body = '';
-    for (const [date, dGames] of Object.entries(byDate)) {
-      body += `<div class="date-header">${formatDate(date)}</div>`;
-      dGames.forEach((g) => { body += gameCardHTML(g, favTeam); });
-    }
-    html += collapsibleSectionHTML(div, body, `${games.length} games`);
-  });
+  const resolved = getResolved(viewingDivision);
+  let html = viewingBarHTML();
+  html += placementTrackerHTML(resolved, viewingDivision) ||
+    `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-msg">No results yet in this division</div></div>`;
 
   el.innerHTML = html;
 }

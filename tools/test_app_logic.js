@@ -73,12 +73,20 @@ check('My Team content renders games', myTeamHtml.includes('game-card'));
 check('My Team shows scenario card', myTeamHtml.includes('Path to the Finish'));
 check('My Team scenario shows a best/worst case range', myTeamHtml.includes('Best Case') && myTeamHtml.includes('Worst Case'));
 
+// --- Bracket tab: viewing bar + group standings + Game#-ordered schedule (no tracker here) ---
 vm.runInContext("showTab('standings')", sandbox);
 const standingsHtml = el('standingsContent').innerHTML;
 check('Bracket tab shows the viewing bar for the favorite division', standingsHtml.includes('Viewing Bracket') && standingsHtml.includes('16U'));
-check('Standings renders group tables', standingsHtml.includes('Group B'));
-check('Standings shows Placement Tracker', standingsHtml.includes('Placement Tracker'));
-check('Standings tracker has a tier class', /tier-(gold|mid|low)/.test(standingsHtml));
+check('Bracket tab renders group tables', standingsHtml.includes('Group B'));
+check('Bracket tab does NOT show the Placement Tracker (moved to Tournament tab)', !standingsHtml.includes('Placement Tracker'));
+check('Bracket tab renders that division\'s game cards', standingsHtml.includes('game-card'));
+
+// Game# ordering within the Bracket tab's schedule, using the data-game-id attribute.
+// "16GD1xx" is 16U_GIRLS_D1; "16GD2xx" (16U_GIRLS_D2) also starts with "16GD" so the division
+// digit must be pinned, or this picks up both divisions' games interleaved.
+const div16GameIds = [...standingsHtml.matchAll(/data-game-id="(16GD1\d+)"/g)].map((m) => m[1]);
+const sortedCheck = div16GameIds.every((id, i) => i === 0 || sandbox.Resolver.localNumber(div16GameIds[i - 1]) <= sandbox.Resolver.localNumber(id));
+check('Bracket tab games are ordered by Game# (localNumber), ascending', sortedCheck && div16GameIds.length > 0);
 
 // Bracket switcher: viewing a division your favorite team isn't in should work standalone.
 vm.runInContext("selectBracket('18U_GIRLS_D1')", sandbox);
@@ -90,22 +98,15 @@ vm.runInContext("selectTeam('REGENCY', '16U_GIRLS_D1')", sandbox);
 vm.runInContext("showTab('standings')", sandbox);
 check('Re-selecting favorite team resets viewingDivision', el('standingsContent').innerHTML.includes('16U'));
 
+// --- Tournament tab: viewing bar + Placement Tracker only (GD column + next opponent) ---
 vm.runInContext("showTab('schedule')", sandbox);
 const scheduleHtml = el('scheduleContent').innerHTML;
-check('Schedule shows resolved bracket labels, not raw tokens', !scheduleHtml.includes('>W#'));
-check('Tournament tab shows a Final Placements section', scheduleHtml.includes('Final Placements'));
-check('Tournament tab shows a Full Schedule section', scheduleHtml.includes('Full Schedule'));
-const bracketSectionCount = (scheduleHtml.match(/class="bracket-section /g) || []).length;
-check('Tournament tab has a bracket-section per division, twice over (placements + schedule)', bracketSectionCount === 16);
-const expandedCount = (scheduleHtml.match(/class="bracket-section expanded"/g) || []).length;
-check('Exactly the favorite division is expanded in each section (2 total)', expandedCount === 2);
-
-// Game# ordering within a division's schedule section, using the data-game-id attribute.
-// "16GD1xx" is 16U_GIRLS_D1; "16GD2xx" (16U_GIRLS_D2) also starts with "16GD" so the division
-// digit must be pinned, or this picks up both divisions' games interleaved.
-const div16GameIds = [...scheduleHtml.matchAll(/data-game-id="(16GD1\d+)"/g)].map((m) => m[1]);
-const sortedCheck = div16GameIds.every((id, i) => i === 0 || sandbox.Resolver.localNumber(div16GameIds[i - 1]) <= sandbox.Resolver.localNumber(id));
-check('16U_GIRLS_D1 games in the schedule are ordered by Game# (localNumber), ascending', sortedCheck && div16GameIds.length > 0);
+check('Tournament tab shows the viewing bar', scheduleHtml.includes('Viewing Bracket'));
+check('Tournament tab shows the Placement Tracker', scheduleHtml.includes('Placement Tracker'));
+check('Tournament tab does NOT show individual game cards (moved to Bracket tab)', !scheduleHtml.includes('game-card'));
+check('Placement Tracker has a GD column', scheduleHtml.includes('tracker-gd'));
+check('Placement Tracker shows a next-opponent hint', scheduleHtml.includes('tracker-next'));
+check('Placement Tracker opponent hints are short (no nested matchup parens)', !/tracker-next">\(vs [^)]*\([^)]*\(/.test(scheduleHtml));
 
 // Tournament switcher: re-selecting the same (only) tournament should be a no-op, not crash.
 vm.runInContext("selectTournament('2026-girls-futures-superfinals')", sandbox);
