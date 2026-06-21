@@ -83,5 +83,21 @@ assertEqual(officialResult.standings['F'].ranked[0].name, 'MERIDIAN', 'Our own c
 const overrideGame = officialResult.games.find((g) => g.game_id === '99GD907');
 assertEqual(overrideGame.whiteTeam, 'NORCO', 'Official cached "1stF-NORCO" wins over our own computed 1st place');
 
+// Regression test: a real bug seen on the live sheet -- a "{ord}{group}" cell's cached
+// suffix can drop a club's squad-letter (e.g. "1stA-SANTA BARBARA" instead of the real team
+// "SANTA BARBARA A"). That cached name doesn't match anyone in Group A's roster but IS an
+// unambiguous prefix of exactly one real team, so it should be repaired rather than trusted
+// verbatim (which would otherwise invent a phantom "SANTA BARBARA" team distinct from the
+// actual "SANTA BARBARA A"/"SANTA BARBARA B" squads).
+const truncatedNameGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99GD908', white: 'A1-SANTA BARBARA A', white_score: 13, dark: 'A3-LB VIKING A', dark_score: 8, round: 'A bracket A1,A3', division: '18U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '9:00 AM', location: 'X', game_id: '99GD909', white: 'A1-SANTA BARBARA A', white_score: 12, dark: 'A2-STANFORD', dark_score: 6, round: 'A bracket A1,A2', division: '18U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '10:00 AM', location: 'X', game_id: '99GD910', white: 'A2-STANFORD', white_score: 10, dark: 'A3-LB VIKING A', dark_score: 4, round: 'A bracket A2,A3', division: '18U_GIRLS_D1', played: true },
+  { date: '2026-06-19', time: '11:00 AM', location: 'X', game_id: '99GD911', white: '1stA-SANTA BARBARA', white_score: null, dark: 'TBD', dark_score: null, round: 'QF2', division: '18U_GIRLS_D1', played: false },
+];
+const truncatedResult = global.Resolver.resolveDivision(truncatedNameGames);
+const qf2Repro = truncatedResult.games.find((g) => g.game_id === '99GD911');
+assertEqual(qf2Repro.whiteTeam, 'SANTA BARBARA A', 'Truncated cached "1stA-SANTA BARBARA" repaired to the real team "SANTA BARBARA A"');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

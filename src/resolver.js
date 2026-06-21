@@ -260,8 +260,22 @@
         return { team: null, locked: false, hint: best.hint, feederGame: best.feederGame };
       }
       case 'finish': {
-        if (tok.team) return { team: tok.team, locked: true };
         const g = ctx.standings[tok.let];
+        if (tok.team) {
+          // Trust the cache as-is when it matches a real team in this group's roster
+          // (round-robin slot names are always reliable -- fixed day-1 assignments, never
+          // computed). But the live sheet has shown a downstream formula bug where a
+          // "{ord}{group}" cell drops a club's squad letter (e.g. "1stA-SANTA BARBARA"
+          // instead of "1stA-SANTA BARBARA A", because the real team is "SANTA BARBARA A").
+          // If the cached name doesn't match anyone in the roster but is an unambiguous
+          // prefix of exactly one real name, repair it instead of inventing a phantom team.
+          if (!g || g.ranked.some((r) => r.name === tok.team)) {
+            return { team: tok.team, locked: true };
+          }
+          const fix = g.ranked.filter((r) => r.name.startsWith(tok.team));
+          if (fix.length === 1) return { team: fix[0].name, locked: true };
+          return { team: tok.team, locked: true };
+        }
         if (g && g.complete && g.ranked[tok.ord - 1]) {
           return { team: g.ranked[tok.ord - 1].name, locked: true };
         }

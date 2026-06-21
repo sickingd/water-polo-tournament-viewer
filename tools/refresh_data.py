@@ -33,6 +33,15 @@ MONTHS = {m: i + 1 for i, m in enumerate(
 # any slot/ordinal/bracket-progress/placement token, ignoring hyphens inside parens.
 TOKEN_RE = re.compile(r'^([^()-]+?)((?:\([^()]*\))*)(?:-(.*))?$')
 
+# A *concrete round-robin slot* token, e.g. "A1-SANTA BARBARA A" -- no parens, head is just
+# {GROUP_LETTER}{POSITION}. These are fixed day-1 seeding assignments, never computed, so
+# they're the only place a team's name is guaranteed correct. Every other token type ("1stA",
+# "W#QF2", "K1(2ndE)", ...) is a downstream formula and the live sheet has shown at least one
+# bug there: a club's squad-letter suffix ("SANTA BARBARA A") silently dropped to just
+# "SANTA BARBARA" on a "1stA" cell. Only extracting team names from slot tokens means that
+# kind of mangled cell can never inject a phantom team into the picker list.
+SLOT_TOKEN_RE = re.compile(r'^[A-Za-z]+\d+$')
+
 
 def fetch_sheet_csv(sheet_id, sheet_name):
     url = ('https://docs.google.com/spreadsheets/d/%s/gviz/tq?%s' %
@@ -55,7 +64,9 @@ def extract_team_name(token):
     m = TOKEN_RE.match((token or '').strip())
     if not m:
         return None
-    team = m.group(3)
+    head, parens, team = m.group(1), m.group(2), m.group(3)
+    if parens or not SLOT_TOKEN_RE.match(head):
+        return None
     return team.strip() if team and team.strip() else None
 
 
