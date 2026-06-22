@@ -1,0 +1,13 @@
+{
+  "name": "water-polo-tournament-viewer",
+  "private": true,
+  "description": "Run `npm install` once, then `npm run deploy` to publish both the static site and the live-data Worker to Cloudflare.",
+  "scripts": {
+    "deploy:site": "wrangler deploy",
+    "deploy:worker": "wrangler deploy --config worker/wrangler.toml",
+    "deploy": "npm run deploy:site && npm run deploy:worker"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
