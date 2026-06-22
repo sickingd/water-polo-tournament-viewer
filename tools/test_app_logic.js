@@ -7,9 +7,12 @@ const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'tournament_app.html'), 'utf8');
-const m = /<script>([\s\S]*?)<\/script>\s*<\/body>/.exec(html);
-if (!m) throw new Error('could not find inline <script> body');
-const appJs = m[1];
+// Bare <script>...</script> (no attributes) appears more than once now (the GA4 config
+// snippet in <head> is one too) -- the main app logic is always the *last* one, right
+// before </body>, so take that rather than the first match.
+const scriptMatches = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+if (!scriptMatches.length) throw new Error('could not find inline <script> body');
+const appJs = scriptMatches[scriptMatches.length - 1][1];
 
 class FakeEl {
   constructor() { this.innerHTML = ''; this.textContent = ''; this._classes = new Set(); this.value = ''; }

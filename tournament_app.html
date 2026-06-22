@@ -6,6 +6,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Water Polo Tournament</title>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-96JGXVFB8K"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-96JGXVFB8K');
+</script>
 <style>
 :root {
   --blue: #1a56a8;
@@ -294,6 +302,12 @@ function getResolved(division) {
   return resolvedCache[division];
 }
 
+// --- Analytics ---
+// Guards every call site so an ad blocker (gtag never loads) can't break the app.
+function track(eventName, params) {
+  if (typeof gtag === 'function') gtag('event', eventName, params || {});
+}
+
 // --- State ---
 let favTeam = localStorage.getItem('favTeam') || null;
 let favDiv  = localStorage.getItem('favDiv')  || null;
@@ -323,6 +337,7 @@ renderSchedule();
 // --- Tab switching ---
 function showTab(tab) {
   activeTab = tab;
+  track('view_tab', { tab_name: tab });
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
@@ -904,6 +919,7 @@ function selectTeamFromEl(el) {
   selectTeam(el.dataset.name, el.dataset.div);
 }
 function selectTeam(name, div) {
+  track('select_team', { team_name: name, division: div });
   favTeam = name;
   favDiv  = div;
   viewingDivision = div;
@@ -957,6 +973,7 @@ function selectTournament(id) {
     closeTourneyPicker();
     return;
   }
+  track('select_tournament', { tournament_id: id });
   activeTournamentId = id;
   localStorage.setItem('activeTournamentId', id);
   TD = window.TOURNAMENTS[id];
@@ -1003,6 +1020,7 @@ function selectBracketFromEl(el) {
   selectBracket(el.dataset.div);
 }
 function selectBracket(div) {
+  track('view_bracket', { division: div });
   viewingDivision = div;
   localStorage.setItem('viewingDivision', div);
   closeBracketPicker();
