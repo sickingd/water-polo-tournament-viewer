@@ -1,8 +1,14 @@
-name: Refresh tournament data
+# No longer the live-freshness mechanism -- that's now the Cloudflare Worker (worker/index.js,
+# polling every ~1 minute server-side, see the project's hosting plan). GitHub Pages' fixed
+# 10-minute CDN cache made this pipeline structurally too slow for live play regardless of
+# how often it ran. This workflow's remaining job is a periodic durable snapshot: fast cold
+# loads, a permanent git history of scores over time, and (eventually) the mechanism that
+# freezes a tournament's data once it's marked completed.
+name: Refresh tournament data (periodic snapshot)
 
 on:
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch: {}
 
 permissions:

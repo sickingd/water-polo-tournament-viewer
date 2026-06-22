@@ -3,3 +3,6 @@
 *.xlsx
 tools/tmp/
 .claude/
+.wrangler/
+worker/node_modules/
+node_modules/

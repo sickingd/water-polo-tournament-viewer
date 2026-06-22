@@ -1,0 +1,13 @@
+# Cloudflare Workers static-assets upload exclusions (gitignore-style). Without this, the
+# uploader sweeps up the whole checkout -- including .git internals -- as public assets.
+.git
+.github
+.claude
+.wrangler
+node_modules
+worker
+tools
+*.XLSX
+CLAUDE.md
+DESIGN_NOTES.md
+TOURNAMENT_DATA_SPEC.md

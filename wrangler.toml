@@ -1,0 +1,17 @@
+# Static site (replaces GitHub Pages). Deploy with: npx wrangler deploy
+# (run from the repo root -- this is a separate project from worker/wrangler.toml, which
+# deploys the live-data API/cron Worker under the name "clubwaterpolo-live").
+name = "clubwaterpolo-site"
+compatibility_date = "2026-06-21"
+
+# Cloudflare resolves overlapping Worker routes by most-specific-pattern-wins, so this
+# broad wildcard coexists safely with clubwaterpolo-live's more specific
+# "clubwaterpolo.com/api/*" route (worker/wrangler.toml) -- API requests keep going there,
+# everything else lands here.
+routes = [
+  { pattern = "clubwaterpolo.com/*", zone_name = "clubwaterpolo.com" },
+  { pattern = "www.clubwaterpolo.com/*", zone_name = "clubwaterpolo.com" },
+]
+
+[assets]
+directory = "."

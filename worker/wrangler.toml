@@ -1,0 +1,20 @@
+name = "clubwaterpolo-live"
+main = "index.js"
+compatibility_date = "2026-06-21"
+
+# Attaches this Worker to clubwaterpolo.com/api/* on the same zone/domain as the Cloudflare
+# Pages site -- no separate subdomain needed. Requires the zone to already be active on
+# Cloudflare (nameservers delegated) before `wrangler deploy` will accept this.
+routes = [
+  { pattern = "clubwaterpolo.com/api/*", zone_name = "clubwaterpolo.com" },
+]
+
+# Runs every minute -- well within the "every 5 minutes, reliably" requirement, and Cron
+# Triggers are a primary supported Cloudflare use case (unlike GitHub Actions' best-effort
+# scheduling, which is what this whole migration is fixing).
+[triggers]
+crons = ["*/1 * * * *"]
+
+[[kv_namespaces]]
+binding = "TOURNAMENT_KV"
+id = "c157fb642daf4a3bafee99582667634c"

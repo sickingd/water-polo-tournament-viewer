@@ -379,6 +379,37 @@ function renderLastUpdated() {
 }
 setInterval(renderLastUpdated, 30000);
 
+// --- Live polling -------------------------------------------------------
+// Pulls fresh data from the Cloudflare Worker (/api/tournaments/<id>, backed by a
+// ~1-minute cron against the live sheet -- see worker/index.js) instead of waiting on a
+// page reload to pick up a new static data/<id>.js. Harmless before that Worker exists or
+// is routed: the fetch just 404s and this silently no-ops, so today's static-only
+// experience is unaffected until the Cloudflare migration is live.
+async function pollLiveData() {
+  if (document.visibilityState !== 'visible') return;
+  const entry = MANIFEST.find((t) => t.id === activeTournamentId);
+  if (!entry || entry.status !== 'current') return; // only the live tournament needs polling
+  let data;
+  try {
+    const res = await fetch(`/api/tournaments/${encodeURIComponent(activeTournamentId)}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    data = await res.json();
+  } catch (e) {
+    return; // Worker not deployed/reachable yet -- fall back silently to the static snapshot
+  }
+  if (!data || !data.generated || data.generated === TD.generated) return; // nothing newer
+  window.TOURNAMENTS[activeTournamentId] = data;
+  TD = data;
+  resolvedCache = {};
+  renderHeader();
+  renderMyTeam();
+  renderSchedule();
+  if (activeTab === 'standings') renderStandings();
+  renderLastUpdated();
+}
+setInterval(pollLiveData, 45000);
+pollLiveData();
+
 function divLabel(div) {
   if (!div) return '';
   return div.replace(/_/g, ' ').replace('GIRLS', 'Girls').replace('BOYS', 'Boys');
