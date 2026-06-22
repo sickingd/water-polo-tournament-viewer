@@ -9,11 +9,14 @@ routes = [
   { pattern = "clubwaterpolo.com/api/*", zone_name = "clubwaterpolo.com" },
 ]
 
-# Runs every minute -- well within the "every 5 minutes, reliably" requirement, and Cron
-# Triggers are a primary supported Cloudflare use case (unlike GitHub Actions' best-effort
-# scheduling, which is what this whole migration is fixing).
+# Every 3 minutes -- still comfortably beats the "every 5 minutes, reliably" requirement
+# (and Cron Triggers are a primary supported Cloudflare use case, unlike GitHub Actions'
+# best-effort scheduling, which is what this whole migration is fixing). A 1-minute interval
+# was tried first and blew through the free KV tier's 1,000 writes/day quota (1,440/day at
+# 1/min, even before the write-skip-if-unchanged logic in index.js); at 3 minutes that's
+# 480 writes/day worst case, well under the limit with room for more tournaments later.
 [triggers]
-crons = ["*/1 * * * *"]
+crons = ["*/3 * * * *"]
 
 [[kv_namespaces]]
 binding = "TOURNAMENT_KV"
