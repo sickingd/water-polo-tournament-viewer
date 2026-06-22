@@ -1,10 +1,12 @@
-# Cloudflare Pages header rules. GitHub Pages hardcodes Cache-Control: max-age=600 on
-# everything with no way to override it -- that's the actual cause of scores taking up to
-# 10-20 minutes to show up after a refresh. `no-cache` still allows cheap ETag revalidation;
-# it just stops the browser/CDN from blindly trusting a stale copy.
-/data/*
-  Cache-Control: no-cache
-/*.html
-  Cache-Control: no-cache
-/src/*
+# Cloudflare header rules. GitHub Pages hardcoded Cache-Control: max-age=600 on everything
+# with no way to override it -- that's the original cause of scores taking up to 10-20
+# minutes to show up after a refresh. `no-cache` still allows cheap ETag revalidation; it
+# just stops the browser/CDN from blindly trusting a stale copy.
+#
+# Catch-all, not scoped to /*.html -- Workers Static Assets redirects "/foo.html" requests
+# to the extensionless "/foo", and that's the path that actually serves the content, so a
+# pattern scoped to ".html" silently misses it and falls through to Cloudflare's default
+# edge caching (confirmed: this caused tournament_app.html itself to serve stale content
+# after a deploy, even though the redirect response was correctly no-cache).
+/*
   Cache-Control: no-cache
