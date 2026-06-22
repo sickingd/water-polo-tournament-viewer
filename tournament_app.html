@@ -587,7 +587,9 @@ function finalPlacementFor(resolved, teamName) {
   let place = null;
   resolved.games.forEach((g) => {
     if (g.status !== 'final') return;
-    const m = /^(\d+)(st|nd|rd|th)$/i.exec((g.round || '').trim());
+    // Prefix match, not anchored at the end -- terminal-game round labels often carry a
+    // trailing matchup suffix (e.g. "3rd 3v4", "7th 7v8").
+    const m = /^(\d+)(st|nd|rd|th)/i.exec((g.round || '').trim());
     if (!m) return;
     const n = parseInt(m[1], 10);
     const winnerIsWhite = parseFloat(g.white_score) > parseFloat(g.dark_score);

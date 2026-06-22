@@ -40,6 +40,11 @@
     return m ? parseInt(m[1], 10) : null;
   }
 
+  // Canonical, order-independent key for a cross-group finish pair, e.g. (1,"E"),(2,"F") -> "1E,2F".
+  function finishPairKey(ord1, let1, ord2, let2) {
+    return [ord1 + let1.toUpperCase(), ord2 + let2.toUpperCase()].sort().join(',');
+  }
+
   // Split "E2(1stD)(W#14)-ROSE BOWL" into { head: "E2", parens: ["1stD","W#14"], team: "ROSE BOWL" }
   function splitToken(raw) {
     const s = (raw || '').trim();
@@ -63,6 +68,17 @@
     // W#/L# progress, pair form: W#N1/N4 (the letter repeats before each seed number)
     if ((m = /^([WL])#([A-Za-z]+)(\d+)\/\2(\d+)$/.exec(head))) {
       return { type: 'progressPair', wl: m[1], let: m[2], a: parseInt(m[3], 10), b: parseInt(m[4], 10), team, raw };
+    }
+    // W#/L# progress, cross-group finish-pair form: W#1E/2F -- identifies a single-elim
+    // placement game (e.g. a "1-4 semi") by the group finishes of its two sides, bare
+    // digit-then-letter (no "st"/"nd"/"rd"/"th"), seen in 12U/14U sheets' 1-4 / 5-8 brackets.
+    if ((m = /^([WL])#(\d+)([A-Za-z]+)\/(\d+)([A-Za-z]+)$/.exec(head))) {
+      return {
+        type: 'finishPair', wl: m[1],
+        ord1: parseInt(m[2], 10), let1: m[3],
+        ord2: parseInt(m[4], 10), let2: m[5],
+        team, raw,
+      };
     }
     // W#/L# progress, round-name or numeric form: W#Cross1, L#12
     if ((m = /^([WL])#(.+)$/.exec(head))) {
@@ -118,6 +134,7 @@
       if (!tok) return;
       if (tok.type === 'progress') out.push({ key: 'ref:' + tok.ref.toLowerCase(), wl: tok.wl });
       else if (tok.type === 'progressPair') out.push({ key: 'pair:' + tok.let.toUpperCase() + ':' + [tok.a, tok.b].sort().join(','), wl: tok.wl });
+      else if (tok.type === 'finishPair') out.push({ key: 'finishpair:' + finishPairKey(tok.ord1, tok.let1, tok.ord2, tok.let2), wl: tok.wl });
       else if (tok.type === 'seed') tok.sources.forEach((s) => collectProgressRefs(s, out));
     }
     parsedGames.forEach((entry) => {
@@ -298,6 +315,13 @@
         if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: `${tok.wl === 'W' ? 'Winner' : 'Loser'} of ${label}` };
       }
+      case 'finishPair': {
+        const feeder = findFinishPairGame(ctx, tok.ord1, tok.let1, tok.ord2, tok.let2);
+        const label = `${tok.ord1}${tok.let1}/${tok.ord2}${tok.let2}`;
+        if (feeder) return resolveFromGame(feeder, tok.wl, ctx, depth);
+        if (tok.team) return { team: tok.team, locked: true };
+        return { team: null, locked: false, hint: `${tok.wl === 'W' ? 'Winner' : 'Loser'} of ${label}` };
+      }
       default:
         return { team: null, locked: false, hint: 'TBD' };
     }
@@ -349,6 +373,16 @@
       const wt = e.white, dt = e.dark;
       const isSeed = (t) => t.type === 'seed' && t.let === let_ && want.has(t.pos);
       return isSeed(wt) && isSeed(dt) && wt.pos !== dt.pos;
+    }) || null;
+  }
+
+  function findFinishPairGame(ctx, ord1, let1, ord2, let2) {
+    const want = finishPairKey(ord1, let1, ord2, let2);
+    return ctx.division.games.find((e) => {
+      const wt = e.white, dt = e.dark;
+      if (wt.type !== 'finish' || dt.type !== 'finish') return false;
+      if (wt.ord === dt.ord && wt.let.toUpperCase() === dt.let.toUpperCase()) return false;
+      return finishPairKey(wt.ord, wt.let, dt.ord, dt.let) === want;
     }) || null;
   }
 
@@ -411,7 +445,23 @@
       return (w.team === teamName) || (d.team === teamName);
     });
     const upcoming = myGames.filter((e) => !e.final);
-    if (!upcoming.length) return null;
+    if (!upcoming.length) {
+      // This team has no games left, but if those games were a placement round-robin
+      // (e.g. "21-24 RR") and the bracket's OTHER teams haven't all finished yet, this
+      // team's exact rank is still pending -- fall back to the bracket's own bounded
+      // range rather than reporting nothing. Once every team in the group is done,
+      // finalPlacementFor's standings-based lookup takes over with the exact rank.
+      const rrGame = myGames.find((e) => rrPlacementRange(e));
+      if (rrGame) {
+        const let_ = (rrGame.white.type === 'seed' && rrGame.white.let) || (rrGame.dark.type === 'seed' && rrGame.dark.let);
+        const group = let_ && ctx.standings[let_];
+        if (!group || !group.complete) {
+          const range = rrPlacementRange(rrGame);
+          return { tree: { terminal: true, rrRange: range }, floor: range[1], ceiling: range[0] };
+        }
+      }
+      return null;
+    }
     upcoming.sort((a, b) => (a.raw.game_id > b.raw.game_id ? 1 : -1));
     const current = upcoming[0];
 
@@ -438,6 +488,11 @@
       if (entry.white.type === 'seed' && entry.dark.type === 'seed' && entry.white.let === entry.dark.let) {
         keys.push('pair:' + entry.white.let.toUpperCase() + ':' + [entry.white.pos, entry.dark.pos].sort().join(','));
       }
+      // Likewise a cross-group placement semi (e.g. white=1stE, dark=2ndF) is referenced
+      // downstream as "W#/L#1E/2F" -- derive that finish-pair key the same way.
+      if (entry.white.type === 'finish' && entry.dark.type === 'finish') {
+        keys.push('finishpair:' + finishPairKey(entry.white.ord, entry.white.let, entry.dark.ord, entry.dark.let));
+      }
       for (const key of keys) {
         const refs = division.refIndex.get(key);
         if (!refs) continue;
@@ -448,7 +503,10 @@
     }
 
     function terminalPlace(entry, wl) {
-      const m = /^(\d+)(st|nd|rd|th)$/i.exec((entry.raw.round || '').trim());
+      // Prefix match, not anchored at the end -- terminal-game round labels often carry a
+      // trailing matchup suffix (e.g. "1st 1v2", "7th 7v8") that finalPlacementFor (in the
+      // app, for already-decided games) already ignores the same way.
+      const m = /^(\d+)(st|nd|rd|th)/i.exec((entry.raw.round || '').trim());
       if (m) {
         const place = parseInt(m[1], 10);
         return wl === 'W' ? place : place + 1;
