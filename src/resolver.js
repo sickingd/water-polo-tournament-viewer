@@ -45,6 +45,22 @@
     return [ord1 + let1.toUpperCase(), ord2 + let2.toUpperCase()].sort().join(',');
   }
 
+  // Edit distance, used to repair small human typos in cached team names (e.g. "RANCO
+  // TSUNAMI" -> "RANCHO TSUNAMI", a dropped letter mid-word that a prefix check can't catch).
+  function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+    return dp[m][n];
+  }
+
   // Split "E2(1stD)(W#14)-ROSE BOWL" into { head: "E2", parens: ["1stD","W#14"], team: "ROSE BOWL" }
   function splitToken(raw) {
     const s = (raw || '').trim();
@@ -295,6 +311,12 @@
           }
           const fix = g.ranked.filter((r) => r.name.startsWith(tok.team));
           if (fix.length === 1) return { team: fix[0].name, locked: true };
+          // Other typos (a dropped/swapped letter mid-word, e.g. "RANCO TSUNAMI" for
+          // "RANCHO TSUNAMI") aren't prefix mismatches -- repair via edit distance, but
+          // only when exactly one roster name is unambiguously close, so two genuinely
+          // different real teams never get merged.
+          const close = g.ranked.filter((r) => levenshtein(r.name, tok.team) <= 2);
+          if (close.length === 1) return { team: close[0].name, locked: true };
           return { team: tok.team, locked: true };
         }
         if (g && g.complete && g.ranked[tok.ord - 1]) {
