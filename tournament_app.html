@@ -317,8 +317,28 @@ function getResolved(division) {
 
 // --- Analytics ---
 // Guards every call site so an ad blocker (gtag never loads) can't break the app.
+// tournament_id is auto-injected on every event so nothing needs to remember to pass it --
+// callers can still override it explicitly (e.g. select_tournament wants the *new* id).
 function track(eventName, params) {
-  if (typeof gtag === 'function') gtag('event', eventName, params || {});
+  if (typeof gtag === 'function') {
+    gtag('event', eventName, Object.assign({ tournament_id: activeTournamentId }, params || {}));
+  }
+}
+// Shared shape for "which bracket was this event about" -- age_group/pool are split out
+// (via the existing ageOf/divNum helpers) so GA4 can filter by age or pool independently
+// instead of string-matching a combined division like "16U_GIRLS_D1".
+function divisionContext(div) {
+  return { division: div || '', age_group: div ? ageOf(div) : '', pool: div ? (divNum(div) || '') : '' };
+}
+// Followed team as a GA4 user property (not just a one-off event) so it persists across the
+// session/future sessions -- lets you segment "users following Team X" in GA4 directly.
+function syncFollowedTeamUserProperty() {
+  if (typeof gtag !== 'function') return;
+  gtag('set', 'user_properties', {
+    followed_team: favTeam || '(none)',
+    followed_division: favDiv || '(none)',
+    followed_age_group: favDiv ? ageOf(favDiv) : '(none)',
+  });
 }
 
 // --- State ---
@@ -330,6 +350,7 @@ if (favTeam && !TD.teams.some((t) => t.name === favTeam && t.division === favDiv
   favTeam = null;
   favDiv = null;
 }
+syncFollowedTeamUserProperty();
 
 function allDivisions() {
   return Array.from(new Set(TD.teams.map((t) => t.division))).sort();
@@ -350,7 +371,7 @@ renderSchedule();
 // --- Tab switching ---
 function showTab(tab) {
   activeTab = tab;
-  track('view_tab', { tab_name: tab });
+  track('view_tab', Object.assign({ tab_name: tab }, divisionContext(viewingDivision)));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
@@ -985,13 +1006,14 @@ function selectTeamFromEl(el) {
   selectTeam(el.dataset.name, el.dataset.div);
 }
 function selectTeam(name, div) {
-  track('select_team', { team_name: name, division: div });
+  track('select_team', Object.assign({ team_name: name }, divisionContext(div)));
   favTeam = name;
   favDiv  = div;
   viewingDivision = div;
   localStorage.setItem('favTeam', name);
   localStorage.setItem('favDiv', div);
   localStorage.setItem('viewingDivision', div);
+  syncFollowedTeamUserProperty();
   closePickerForce();
   renderHeader();
   renderMyTeam();
@@ -1042,7 +1064,7 @@ function selectTournament(id) {
     closeTourneyPicker();
     return;
   }
-  track('select_tournament', { tournament_id: id });
+  track('select_tournament', { tournament_id: id, previous_tournament_id: activeTournamentId });
   activeTournamentId = id;
   localStorage.setItem('activeTournamentId', id);
   TD = window.TOURNAMENTS[id];
@@ -1052,6 +1074,7 @@ function selectTournament(id) {
     favDiv = null;
     localStorage.removeItem('favTeam');
     localStorage.removeItem('favDiv');
+    syncFollowedTeamUserProperty();
   }
   viewingDivision = favDiv || allDivisions()[0] || null;
   if (viewingDivision) localStorage.setItem('viewingDivision', viewingDivision);
@@ -1089,7 +1112,7 @@ function selectBracketFromEl(el) {
   selectBracket(el.dataset.div);
 }
 function selectBracket(div) {
-  track('view_bracket', { division: div });
+  track('view_bracket', divisionContext(div));
   viewingDivision = div;
   localStorage.setItem('viewingDivision', div);
   closeBracketPicker();
