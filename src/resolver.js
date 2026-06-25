@@ -702,15 +702,22 @@
     // When the team's current game is still pool play, there's no W#/L# reference chain to
     // walk yet (pool games are referenced by group *finish*, e.g. "1stA", never by their own
     // individual winner/loser) -- `leaves` comes back empty even though the team obviously
-    // still has a placement to play for. Rather than report "unknown", fall back to the
-    // full division range: with zero results locking anything in, every team can still
-    // finish anywhere from 1st to last. `totalTeams` is optional (existing callers that
-    // don't pass it keep today's `null` behavior) and only used when nothing more specific
-    // was found.
+    // still has a placement to play for. Rather than report "unknown", fall back to the full
+    // division range: with zero results locking anything in, every team can still finish
+    // anywhere from 1st to last. But that's only true while the team is still in its
+    // *original* pool/round-robin stage (current's own token is a bare 'slot' or, for a flat
+    // round robin with no slot grammar at all, 'team') -- a team already promoted into a
+    // lower placement bracket via a finish seed (e.g. "G2(3rdB)") structurally can't reach
+    // 1st anymore, so the same blind full-range guess there would be actively misleading, not
+    // just imprecise. `totalTeams` is optional (existing callers that don't pass it keep
+    // today's `null` behavior) and only used when nothing more specific was found.
+    const myTok = resolveToken(current.white, ctx, 0).team === teamName ? current.white : current.dark;
+    const stillInOriginalStage = myTok.type === 'slot' || myTok.type === 'team';
+    const fallback = stillInOriginalStage ? totalTeams : null;
     return {
       tree,
-      floor: leaves.length ? Math.max(...leaves) : (totalTeams || null),
-      ceiling: leaves.length ? Math.min(...leaves) : (totalTeams ? 1 : null),
+      floor: leaves.length ? Math.max(...leaves) : (fallback || null),
+      ceiling: leaves.length ? Math.min(...leaves) : (fallback ? 1 : null),
     };
   }
 
