@@ -296,6 +296,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <script src="data/manifest.js"></script>
 <script src="data/2026-girls-futures-superfinals.js"></script>
 <script src="data/2026-girls-us-club-championships.js"></script>
+<script src="data/2026-boys-us-club-championships.js"></script>
 <script>
 // --- Tournament selection ---
 const MANIFEST = window.TOURNAMENT_MANIFEST || [];
@@ -461,7 +462,7 @@ pollLiveData();
 
 function divLabel(div) {
   if (!div) return '';
-  return div.replace(/_/g, ' ').replace('GIRLS', 'Girls').replace('BOYS', 'Boys');
+  return div.replace(/_/g, ' ').replace('GIRLS', 'Girls').replace('BOYS', 'Boys').replace('COED', 'CoEd');
 }
 
 // --- My Team ---

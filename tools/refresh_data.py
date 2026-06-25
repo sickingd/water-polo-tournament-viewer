@@ -42,6 +42,14 @@ TOKEN_RE = re.compile(r'^([^()-]+?)((?:\([^()]*\))*)(?:-(.*))?$')
 # kind of mangled cell can never inject a phantom team into the picker list.
 SLOT_TOKEN_RE = re.compile(r'^[A-Za-z]+\d+$')
 
+# A handful of divisions (e.g. 10U_COED in the Club Championships format) play a flat round
+# robin with no "A1-" slot convention at all -- the WHITE/DARK cell is just the team name
+# outright. extract_team_name() below trusts a dash-less head as a literal name UNLESS it
+# matches one of these unresolved-formula shapes (a W#/L# bracket ref or an ordinal group
+# finish with no cached name), which must stay untrusted like any other formula token.
+BARE_PROGRESS_RE = re.compile(r'^[WL]#', re.IGNORECASE)
+BARE_FINISH_RE = re.compile(r'^\d+(?:st|nd|rd|th)[A-Za-z]+$', re.IGNORECASE)
+
 
 def fetch_sheet_csv(sheet_id, sheet_name):
     url = ('https://docs.google.com/spreadsheets/d/%s/gviz/tq?%s' %
@@ -66,6 +74,9 @@ def extract_team_name(token):
         return None
     head, parens, team = m.group(1), m.group(2), m.group(3)
     if parens or not SLOT_TOKEN_RE.match(head):
+        if (not team and not parens and not BARE_PROGRESS_RE.match(head)
+                and not BARE_FINISH_RE.match(head)):
+            return head.strip() or None
         return None
     return team.strip() if team and team.strip() else None
 
@@ -257,10 +268,24 @@ def build_clubchamps_tournament_data(tournament_id, cfg):
                 continue
             comments = (r[comments_idx] or '').strip()
             stamp_m = CC_GAME_STAMP_RE.search(comments)
+            white = normalize_clubchamps_token(white_raw)
+            dark = normalize_clubchamps_token(dark_raw)
             cleaned.append({
-                'row': r, 'white_raw': white_raw, 'dark_raw': dark_raw,
+                'row': r, 'white': white, 'dark': dark,
                 'comments': comments, 'stamp': int(stamp_m.group(1)) if stamp_m else None,
             })
+
+        # Some divisions (e.g. 10U_COED) play a flat round robin with no "A1-"/seed slot
+        # grammar anywhere -- WHITE/DARK cells are bare team names from start to finish, no
+        # bracket at all. Detect that once per division (not per game, which could misfire on
+        # a genuine head-to-head placement game using a cached literal name inside an
+        # otherwise-structured bracket) and synthesize a single implicit group "A" for the
+        # whole division below.
+        division_is_flat = not any(
+            CC_GROUP_LETTER_RE.match(c['white']) or CC_GROUP_LETTER_RE.match(c['dark'])
+            or c['white'].upper().startswith(('W#', 'L#')) or c['dark'].upper().startswith(('W#', 'L#'))
+            for c in cleaned
+        )
 
         # Pass 2: assign each row a number. Stamped rows keep their official number (this is
         # what WINNER#/LOSER# refs resolve against); unstamped rows (pool play -- never
@@ -281,17 +306,20 @@ def build_clubchamps_tournament_data(tournament_id, cfg):
             ds_raw = (r[dark_score_idx] or '').strip()
             played = ws_raw != '' and ds_raw != ''
             round_label = CC_GAME_STAMP_RE.sub('', c['comments']).strip()
-            white = normalize_clubchamps_token(c['white_raw'])
-            dark = normalize_clubchamps_token(c['dark_raw'])
+            white = c['white']
+            dark = c['dark']
             if not round_label:
-                # Unlike the old format (COMMENTS always said e.g. "B bracket B1,B3" for pool
-                # play), this sheet leaves pool-play COMMENTS blank -- src/resolver.js's
-                # round-robin detector requires the literal word "bracket"/"RR" in the round
-                # label, so a same-letter bare-slot-vs-bare-slot game (the only shape pool
-                # play ever takes here) is tagged the same way the old format already does.
-                pool_let = pool_group_letter(white, dark)
-                if pool_let:
-                    round_label = f'{pool_let} bracket'
+                if division_is_flat:
+                    round_label = 'A bracket'
+                else:
+                    # Unlike the old format (COMMENTS always said e.g. "B bracket B1,B3" for
+                    # pool play), this sheet leaves pool-play COMMENTS blank -- src/resolver.js's
+                    # round-robin detector requires the literal word "bracket"/"RR" in the round
+                    # label, so a same-letter bare-slot-vs-bare-slot game (the only shape pool
+                    # play ever takes here) is tagged the same way the old format already does.
+                    pool_let = pool_group_letter(white, dark)
+                    if pool_let:
+                        round_label = f'{pool_let} bracket'
             all_games.append({
                 'date': parse_date_mdy(r[date_idx]),
                 'time': (r[time_idx] or '').strip(),

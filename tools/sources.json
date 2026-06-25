@@ -16,5 +16,17 @@
       { "division": "16U_GIRLS", "sheet_id": "1VDtD_ofCmPwJenYQGDIHMXkfdO55EU7kcj8XsImh1XY" },
       { "division": "18U_GIRLS", "sheet_id": "1ok3A1J89hZqvufIFlzCkmmq5d46Yd5pog36JsDta_cI" }
     ]
+  },
+  "2026-boys-us-club-championships": {
+    "label": "2026 Boys US Club Championships",
+    "year": 2026,
+    "status": "completed",
+    "sources": [
+      { "division": "10U_COED", "sheet_id": "1TInyhZ3SQQ1bzSx5pxTzgzuTTtfrGrCjehzBJfmESXY" },
+      { "division": "12U_BOYS", "sheet_id": "1wbbofyynXTiN3KRdhLnGgSl_x1FUquTA4FagQTCrpQY" },
+      { "division": "14U_BOYS", "sheet_id": "14gspPWogN3HD_yZZZOdJWhj8gpDBXkqSjJYIsGDKA7o" },
+      { "division": "16U_BOYS", "sheet_id": "1FuCUomKqgfg8d83zYxld0B2mnTmcbefwyxKFEebMgiY" },
+      { "division": "18U_BOYS", "sheet_id": "1IJcucdqDY25HwqqwEJV9htt8zW3pTdwNn5_Rqs5E8P8" }
+    ]
   }
 }

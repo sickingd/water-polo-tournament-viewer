@@ -181,8 +181,16 @@
     // marks it as round-robin play (contains "bracket" or "RR").
     const groups = new Map(); // LET -> { teams: Map(name -> record), games: [] }
 
-    function letOf(tok) {
+    function letOf(tok, round) {
       if (tok.type === 'slot' || tok.type === 'seed') return tok.let;
+      // A flat round robin with no slot/seed grammar at all (e.g. 10U_COED) -- the token has
+      // no {LET}{pos} head to read a group from, so fall back to the group letter embedded in
+      // the synthesized round label ("A bracket") the ingestion script attaches per-division
+      // for exactly this shape.
+      if (tok.type === 'team') {
+        const m = /^([A-Za-z]+)\s*bracket/i.exec(round || '');
+        return m ? m[1].toUpperCase() : null;
+      }
       return null;
     }
 
@@ -190,8 +198,8 @@
       const round = (entry.raw.round || '');
       const isRR = /bracket|RR/i.test(round);
       if (!isRR) return;
-      const wl = letOf(entry.white);
-      const dl = letOf(entry.dark);
+      const wl = letOf(entry.white, round);
+      const dl = letOf(entry.dark, round);
       if (!wl || !dl || wl !== dl) return;
       const let_ = wl;
       if (!groups.has(let_)) groups.set(let_, { records: new Map(), games: [] });

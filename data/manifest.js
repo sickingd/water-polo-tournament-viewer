@@ -17,4 +17,11 @@ window.TOURNAMENT_MANIFEST = [
     start_date: '2026-06-19',
     status: 'completed',
   },
+  {
+    id: '2026-boys-us-club-championships',
+    label: '2026 Boys US Club Championships',
+    year: 2026,
+    start_date: '2026-06-19',
+    status: 'completed',
+  },
 ];
