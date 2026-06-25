@@ -505,6 +505,21 @@
     return { games: resolvedGames, standings, ctx };
   }
 
+  // True chronological sort key (date + time-of-day), deliberately NOT game_id/GAME# --
+  // numbering interleaves brackets and days and is not a reliable proxy for "what order did
+  // this team actually play these games in" (see TOURNAMENT_DATA_SPEC.md). Mirrors
+  // tournament_app.html's gameTS().
+  function chronoKey(raw) {
+    const m = /(\d+):(\d+)\s*(AM|PM)/i.exec((raw && raw.time) || '');
+    let mins = 0;
+    if (m) {
+      let h = parseInt(m[1], 10) % 12;
+      if (/PM/i.test(m[3])) h += 12;
+      mins = h * 60 + parseInt(m[2], 10);
+    }
+    return ((raw && raw.date) || '') + ':' + String(mins).padStart(4, '0');
+  }
+
   // --- Forward-walk helpers shared by buildScenarios and buildAllPossibleGames -----------
   // None of these close over a particular team -- they operate purely on `division`/`entry`
   // -- so both the single-path ("Path to the Finish") and exhaustive ("all possible future
@@ -594,7 +609,19 @@
       const d = resolveToken(e.dark, ctx, 0);
       return (w.team === teamName) || (d.team === teamName);
     });
-    const upcoming = myGames.filter((e) => !e.final);
+    // A not-final game can be stale rather than truly pending: real-world results sometimes
+    // never get a score typed into an early pool game, even though this team's *later* games
+    // already played out (their downstream seed slots show up final, with a cached name --
+    // see TOURNAMENT_DATA_SPEC.md). A team can't legitimately have a genuinely-pending game
+    // chronologically BEFORE one of its own already-final games, so exclude those here --
+    // otherwise this stale game gets mistaken for "current" and produces a meaningless
+    // full-range floor/ceiling instead of trusting the already-decided later rounds.
+    const latestFinalTS = myGames.reduce((max, e) => {
+      if (!e.final) return max;
+      const ts = chronoKey(e.raw);
+      return max == null || ts > max ? ts : max;
+    }, null);
+    const upcoming = myGames.filter((e) => !e.final && (latestFinalTS == null || chronoKey(e.raw) > latestFinalTS));
     if (!upcoming.length) {
       // This team has no games left, but if those games were a placement round-robin
       // (e.g. "21-24 RR") and the bracket's OTHER teams haven't all finished yet, this
@@ -821,6 +848,16 @@
     // complete and there's still no realCurrent, the team's actual bracket run (locked in
     // from its real finish) has already played all the way through -- nothing left to guess.
     if (!group || group.complete) return results;
+    // The home group can be *unscored* (a game never got a final typed in) without being
+    // genuinely undecided for THIS team -- if they have a later final game elsewhere, that
+    // already proves what happened here (same "stale game" reasoning as buildScenarios
+    // above). Hypothesizing 1st/2nd/3rd-in-group branches the team has already played past
+    // would be actively wrong, not just imprecise, so bail out instead.
+    const groupTS = group.games.reduce((max, e) => {
+      const ts = chronoKey(e.raw);
+      return max == null || ts > max ? ts : max;
+    }, null);
+    if (groupTS != null && myGames.some((e) => e.final && chronoKey(e.raw) > groupTS)) return results;
     for (let ord = 1; ord <= group.size; ord++) {
       const feeder = findFeederGameForFinish(ctx, ord, let_);
       if (!feeder) continue;

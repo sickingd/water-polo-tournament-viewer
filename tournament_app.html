@@ -504,23 +504,26 @@ function renderMyTeam() {
   });
 
   const upcoming = games.filter(g => !g.played);
-  const next = upcoming[0];
 
   let html = '';
   const favDivTeamCount = TD.teams.filter((t) => t.division === favDiv).length;
+  const finalPlace = finalPlacementFor(resolved, favTeam, favDivTeamCount);
+  // A locked final placement means this team's run is over even if one of its own early
+  // games never got a score typed in (the team's later, already-final games already prove
+  // what happened there -- see buildScenarios' "stale game" handling in src/resolver.js).
+  // Don't show that leftover game as "upcoming"/"Next Game" once the result is known.
+  const trulyUpcoming = finalPlace != null ? [] : upcoming;
+  const next = trulyUpcoming[0];
 
   // Tournament over for this team -- show their final placement front and center.
-  if (!upcoming.length) {
-    const place = finalPlacementFor(resolved, favTeam, favDivTeamCount);
-    if (place != null) {
-      const isTop3 = place <= 3;
-      const trophy = isTop3 ? ' 🏆' : '';
-      html += `<div class="final-placement ${isTop3 ? 'top3' : ''}">
-        <div class="final-placement-label">Final Result</div>
-        <div class="final-placement-value">${ordWord(place)}${trophy}</div>
-        <div class="final-placement-div">${escapeHtml(divLabel(favDiv))}</div>
-      </div>`;
-    }
+  if (!trulyUpcoming.length && finalPlace != null) {
+    const isTop3 = finalPlace <= 3;
+    const trophy = isTop3 ? ' 🏆' : '';
+    html += `<div class="final-placement ${isTop3 ? 'top3' : ''}">
+      <div class="final-placement-label">Final Result</div>
+      <div class="final-placement-value">${ordWord(finalPlace)}${trophy}</div>
+      <div class="final-placement-div">${escapeHtml(divLabel(favDiv))}</div>
+    </div>`;
   }
 
   // Record summary
@@ -528,7 +531,7 @@ function renderMyTeam() {
   html += `<div style="flex:1;text-align:center;border-right:1px solid #e5e7eb"><div style="font-size:28px;font-weight:800;color:#15803d">${wins}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Wins</div></div>`;
   html += `<div style="flex:1;text-align:center;border-right:1px solid #e5e7eb"><div style="font-size:28px;font-weight:800;color:#b91c1c">${losses}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Losses</div></div>`;
   if (ties) html += `<div style="flex:1;text-align:center;border-right:1px solid #e5e7eb"><div style="font-size:28px;font-weight:800;color:#d97706">${ties}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Ties</div></div>`;
-  html += `<div style="flex:1;text-align:center"><div style="font-size:28px;font-weight:800;color:#1a56a8">${upcoming.length}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Coming</div></div>`;
+  html += `<div style="flex:1;text-align:center"><div style="font-size:28px;font-weight:800;color:#1a56a8">${trulyUpcoming.length}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Coming</div></div>`;
   html += `</div>`;
 
   // Next game highlight
@@ -804,32 +807,47 @@ function placementTrackerHTML(resolved, division) {
   const divTeams = (TD.teams || []).filter((t) => t.division === division);
   if (!divTeams.length) return '';
 
+  // A division that's just one flat round robin with no elimination bracket at all (e.g.
+  // 10U_COED) has no W#/L# tree for buildScenarios to walk -- asking it anyway produces a
+  // meaningless full-range "1st-Nth" floor/ceiling for whichever team's pool game happens to
+  // still be unplayed, which then sorts that team above others with a far better record. In
+  // this shape, current standings rank IS the right thing to sort and display by.
+  const standingsKeys = Object.keys(resolved.standings);
+  const flatGroup = standingsKeys.length === 1 ? resolved.standings[standingsKeys[0]] : null;
+  function flatRankFor(name) {
+    if (!flatGroup) return null;
+    const idx = flatGroup.ranked.findIndex((r) => r.name === name);
+    return idx === -1 ? null : idx + 1;
+  }
+
   const rows = divTeams.map((t) => {
     const record = recordFor(resolved, t.name);
-    const scenario = Resolver.buildScenarios(resolved.ctx, t.name, divTeams.length);
-    let floor = scenario ? scenario.floor : null;
-    let ceiling = scenario ? scenario.ceiling : null;
-    if (floor == null || ceiling == null) {
-      const locked = finalPlacementFor(resolved, t.name, divTeams.length);
-      if (locked != null) { floor = locked; ceiling = locked; }
-    }
+    const locked = finalPlacementFor(resolved, t.name, divTeams.length);
+    const flatRank = locked == null ? flatRankFor(t.name) : null;
+    const scenario = (locked == null && flatRank == null)
+      ? Resolver.buildScenarios(resolved.ctx, t.name, divTeams.length) : null;
+    let floor = locked != null ? locked : (scenario ? scenario.floor : null);
+    let ceiling = locked != null ? locked : (scenario ? scenario.ceiling : null);
     // Short form of the next opponent for this compact list -- the full scenario opponent
     // string can be multiple levels deep (e.g. "Winner of Playin1 (CLOVIS vs Winner of
     // Cross3 (680 vs ROSE BOWL))"); strip the matchup detail and keep just the top label.
     const nextOpponent = scenario ? (scenario.tree.opponent || '').replace(/\s\(.*\)$/, '') : null;
     const seedKey = seedKeyFor(resolved, t.name);
-    return { name: t.name, record, floor, ceiling, nextOpponent, seedKey };
+    return { name: t.name, record, floor, ceiling, nextOpponent, seedKey, flatRank };
   });
 
   // Ranked by expected finishing place (ceiling, then floor) -- before the tournament starts
   // this is just the seeding, since every team's range is still its full possible spread.
   // When two teams project to the exact same range, that's not a real-performance tiebreak;
-  // fall back to their initial seed (group + position) rather than current win count.
+  // fall back to current standings rank (flat round robins) or initial seed (group + position)
+  // rather than current win count.
   rows.sort((a, b) => {
     const ac = a.ceiling == null ? 999 : a.ceiling, bc = b.ceiling == null ? 999 : b.ceiling;
     if (ac !== bc) return ac - bc;
     const af = a.floor == null ? 999 : a.floor, bf = b.floor == null ? 999 : b.floor;
     if (af !== bf) return af - bf;
+    const ar = a.flatRank == null ? 999 : a.flatRank, br = b.flatRank == null ? 999 : b.flatRank;
+    if (ar !== br) return ar - br;
     const ak = a.seedKey == null ? 999999 : a.seedKey, bk = b.seedKey == null ? 999999 : b.seedKey;
     return ak - bk;
   });
