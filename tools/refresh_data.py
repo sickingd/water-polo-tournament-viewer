@@ -58,6 +58,18 @@ def fetch_sheet_csv(sheet_id, sheet_name):
         return resp.read().decode('utf-8')
 
 
+# The gviz/tq endpoint above (used by the old per-sheet-name format) was confirmed to serve a
+# STALE, edge-cached snapshot for the Club Championships docs -- e.g. a score typed into the
+# live sheet days ago still came back blank from gviz on every refetch, cache-busting query
+# params included, while /export?format=csv returned the correct value immediately every
+# time. These single-tab docs never need a sheet name, so gid=0 (the default/only tab) via
+# /export is both simpler and actually live.
+def fetch_sheet_csv_export(sheet_id):
+    url = 'https://docs.google.com/spreadsheets/d/%s/export?format=csv&gid=0' % sheet_id
+    with urllib.request.urlopen(url, timeout=30) as resp:
+        return resp.read().decode('utf-8')
+
+
 def parse_date(raw, year):
     m = re.match(r'(\d+)-([A-Za-z]+)', raw.strip())
     if not m:
@@ -66,6 +78,13 @@ def parse_date(raw, year):
     if not mon:
         return raw.strip()
     return f'{year:04d}-{mon:02d}-{day:02d}'
+
+
+# A shootout-decided score is goals + a decimal shootout tally (e.g. "7.1"). At least one
+# live cell had that typed with a comma instead ("7,2") -- a locale-keyboard slip, not a
+# different format -- so normalize before parsing rather than letting float() reject it.
+def parse_score(raw):
+    return float(raw.replace(',', '.'))
 
 
 def extract_team_name(token):
@@ -121,9 +140,9 @@ def build_tournament_data(tournament_id, cfg):
             'location': r[idx['location']].strip(),
             'game_id': game_id,
             'white': white,
-            'white_score': float(ws_raw) if played else None,
+            'white_score': parse_score(ws_raw) if played else None,
             'dark': dark,
-            'dark_score': float(ds_raw) if played else None,
+            'dark_score': parse_score(ds_raw) if played else None,
             'round': r[idx['comments']].strip(),
             'division': division,
             'played': played,
@@ -233,11 +252,19 @@ def build_clubchamps_tournament_data(tournament_id, cfg):
     for source in cfg['sources']:
         division = source['division']
         print(f'[{tournament_id}] fetching {division} from sheet {source["sheet_id"]}...')
-        csv_text = fetch_sheet_csv(source['sheet_id'], '')
+        csv_text = fetch_sheet_csv_export(source['sheet_id'])
         rows = list(csv.reader(io.StringIO(csv_text)))
         if not rows:
             raise RuntimeError(f'empty sheet response for {division}')
-        header = [h.strip().upper() for h in rows[0]]
+        # The real header isn't always row 0 -- organizers prepend ad-hoc announcement rows
+        # ("GATE FEE THIS WEEKEND...", "SCHEDULE UPDATED...") above it, and the count varies
+        # by sheet and changes over time. Find the row that actually has 'LOCATION' as a cell
+        # instead of assuming a fixed offset.
+        header_idx = next((i for i, r in enumerate(rows) if 'LOCATION' in [c.strip().upper() for c in r]), None)
+        if header_idx is None:
+            raise RuntimeError(f'could not find header row (no LOCATION cell) for {division}')
+        header = [h.strip().upper() for h in rows[header_idx]]
+        rows = rows[header_idx:]
         loc_idx = header.index('LOCATION')
         time_idx = header.index('TIME')
         white_idx = header.index('WHITE TEAM')
@@ -326,9 +353,9 @@ def build_clubchamps_tournament_data(tournament_id, cfg):
                 'location': (r[loc_idx] or '').strip(),
                 'game_id': f'{division}-{num:03d}',
                 'white': white,
-                'white_score': float(ws_raw) if played else None,
+                'white_score': parse_score(ws_raw) if played else None,
                 'dark': dark,
-                'dark_score': float(ds_raw) if played else None,
+                'dark_score': parse_score(ds_raw) if played else None,
                 'round': round_label,
                 'division': division,
                 'played': played,

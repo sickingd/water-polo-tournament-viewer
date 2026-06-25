@@ -725,8 +725,12 @@ function groupTableHTML(let_, g, division, ctx) {
   return html;
 }
 
-function finalPlacementFor(resolved, teamName, totalTeams) {
-  let place = null;
+// Every team this division's final games/standings can pin to an exact place, built once per
+// call (cheap at these team counts) rather than per-team, because the third pass below needs
+// to see every OTHER team's resolution to infer a group's range from what's left over.
+function allFinalPlacements(resolved, totalTeams) {
+  const known = new Map(); // teamName -> place
+
   resolved.games.forEach((g) => {
     if (g.status !== 'final') return;
     // Prefix match, not anchored at the end -- terminal-game round labels often carry a
@@ -737,27 +741,60 @@ function finalPlacementFor(resolved, teamName, totalTeams) {
     const winnerIsWhite = parseFloat(g.white_score) > parseFloat(g.dark_score);
     const winner = winnerIsWhite ? g.whiteTeam : g.darkTeam;
     const loser = winnerIsWhite ? g.darkTeam : g.whiteTeam;
-    if (winner === teamName) place = n;
-    else if (loser === teamName) place = n + 1;
+    known.set(winner, n);
+    known.set(loser, n + 1);
   });
-  if (place != null) return place;
 
-  // Placement round-robins (e.g. "17-20 RR", "21-24 RR") don't have one deciding game --
-  // the final rank comes from that mini-bracket's own standings once every game in it is
-  // done. resolved.standings already ranks these the same way as pool groups.
-  for (const let_ of Object.keys(resolved.standings)) {
-    const group = resolved.standings[let_];
-    if (!group.complete || !group.games.length) continue;
-    const idx = group.ranked.findIndex((r) => r.name === teamName);
-    if (idx === -1) continue;
+  const standingsKeys = Object.keys(resolved.standings);
+  const completeGroups = standingsKeys
+    .map((let_) => resolved.standings[let_])
+    .filter((group) => group.complete && group.games.length);
+
+  // First pass: groups with an explicit, trustworthy range -- either a literal "17-20 RR"/
+  // "21-24 RR" label in the game's own COMMENTS (placement round robins don't have one
+  // deciding game; the final rank comes from the mini-bracket's own standings), or a flat
+  // round robin with no elimination bracket at all (e.g. 10U_COED) whose one group already
+  // contains every team in the division, so rank directly IS the final placement.
+  completeGroups.forEach((group) => {
     const rangeMatch = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec((group.games[0].raw.round || '').trim());
-    if (rangeMatch) return parseInt(rangeMatch[1], 10) + idx;
-    // A flat round robin with no elimination bracket at all (e.g. 10U_COED) has no "N-M RR"
-    // range text anywhere -- but if this one group already contains every team in the
-    // division, there's nothing else to resolve: its rank directly IS the final placement.
-    if (totalTeams && group.ranked.length === totalTeams) return idx + 1;
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10);
+      group.ranked.forEach((r, idx) => known.set(r.name, start + idx));
+    } else if (totalTeams && group.ranked.length === totalTeams) {
+      group.ranked.forEach((r, idx) => known.set(r.name, idx + 1));
+    }
+  });
+
+  // Second pass: a pool-stage group (A, B, C, ...) feeding into the placement brackets above
+  // has no range of its own -- its members' real final places come from those downstream
+  // groups, which the first pass already resolved. Skip anything already known; what's left
+  // is a genuinely unresolved leftover group, e.g. 12U_BOYS' 7th-11th bracket, whose own
+  // sheet left COMMENTS blank for every one of its games (the spreadsheet's legend area did
+  // label it, but with a stale/inconsistent range for this field size -- "G 9-13 RR" in an
+  // 11-team division, confirmed wrong) -- so it's deliberately NOT trusted here either.
+  const unlabeledGroups = completeGroups.filter((group) =>
+    group.ranked.length && !group.ranked.some((r) => known.has(r.name)));
+
+  // It can still be pinned down if it's the ONLY thing left unresolved: whatever places
+  // 1..totalTeams aren't already claimed above must belong to it, in rank order -- but only
+  // when that gap is an exact, unambiguous fit (one leftover group, gap size matches its team
+  // count exactly). Anything less clear-cut is left unresolved rather than guessed at.
+  if (totalTeams && unlabeledGroups.length === 1) {
+    const group = unlabeledGroups[0];
+    const claimed = new Set(known.values());
+    const gap = [];
+    for (let p = 1; p <= totalTeams; p++) if (!claimed.has(p)) gap.push(p);
+    if (gap.length === group.ranked.length) {
+      group.ranked.forEach((r, idx) => known.set(r.name, gap[idx]));
+    }
   }
-  return null;
+
+  return known;
+}
+
+function finalPlacementFor(resolved, teamName, totalTeams) {
+  const known = allFinalPlacements(resolved, totalTeams);
+  return known.has(teamName) ? known.get(teamName) : null;
 }
 
 // A team's overall record so far this event -- computed directly from their own final
