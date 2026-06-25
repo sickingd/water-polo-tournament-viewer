@@ -134,6 +134,193 @@ def build_tournament_data(tournament_id, cfg):
     }
 
 
+# =====================================================================================
+# "Club Championships" format -- separate from build_tournament_data() above on purpose.
+# Multiple spreadsheets (one per age group), no GAME# column, no DIVISION column, a
+# different DATE format, and two token-grammar quirks not present in the old format. See
+# TOURNAMENT_DATA_SPEC.md / the plan that introduced this for the full reverse-engineering
+# notes. This block must never be merged with the old-format parser above: the old format
+# will recur for future tournaments and its logic must stay exactly as-is.
+# =====================================================================================
+
+# Day-boundary header repeat, e.g. `"","LOCATION","","WHITE TEAM",...` -- the LOCATION
+# column literally contains the word "LOCATION" again.
+CC_HEADER_REPEAT = 'LOCATION'
+
+# A broken merged-cell cross-reference into another age group's sheet renders as the DARK
+# TEAM cell containing the bare literal word "GAME" (e.g. `"18 GIRLS","","GAME"`). A real
+# dark-team token never matches this exactly, so it's a safe, specific filter.
+CC_BOGUS_DARK = 'GAME'
+
+CC_GAME_STAMP_RE = re.compile(r'GAME\s*#\s*(\d+)', re.IGNORECASE)
+CC_WINNER_LOSER_RE = re.compile(r'^(WINNER|LOSER)\s*#\s*(\d+)(.*)$', re.IGNORECASE)
+# No-parens placement-seed form seen in the 12U sheet only, e.g. "E1 -1st A - TEAM" --
+# resolver.js's existing `seed` token type expects parens around the source
+# ("E1(1stA)-TEAM"), which is what files using "T3 (3rdF) - " already match once trimmed.
+CC_NOPAREN_SEED_RE = re.compile(
+    r'^([A-Za-z]+\d+)\s*-\s*(\d+(?:st|nd|rd|th))\s*([A-Za-z]+)\s*-\s*(.*)$', re.IGNORECASE)
+# Dash-before-parens placement-seed form, e.g. "AA1-(1st W)-" -- common in the 14U/16U/18U
+# placement brackets (S/T/W/X/Y/Z/AA/BB/.../LL groups). resolver.js's splitToken expects the
+# parens to immediately follow the head with no hyphen in between ("AA1(1stW)-"); the extra
+# hyphen here makes it misparse the *whole* "(1st W)-" remainder as a literal cached team
+# name, which is exactly the "(1st W)" bogus team the Placement Tracker was showing.
+CC_DASHPAREN_SEED_RE = re.compile(
+    r'^([A-Za-z]+\d+)-\((\d+(?:st|nd|rd|th))\s*([A-Za-z]+)\)-(.*)$', re.IGNORECASE)
+
+
+def parse_date_mdy(raw):
+    m = re.match(r'(\d+)/(\d+)/(\d+)', (raw or '').strip())
+    if not m:
+        return (raw or '').strip()
+    month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return f'{year:04d}-{month:02d}-{day:02d}'
+
+
+# Matches the leading "{LETTERS}{digits}" of EITHER a bare slot ("A1-NEWPORT") or a seed
+# ("K1(1stC)-") -- this sheet uses the exact same "two entrants of group LET" shape for both
+# the initial pool stage (A-H, bare slots) and single-game crossover "mini-groups" later in
+# the bracket (e.g. K/L/M/N, I/J, W/X/Y/Z -- seeds wrapping the previous round's finish).
+# Both need the same standings/round-robin treatment, just with different head token types.
+CC_GROUP_LETTER_RE = re.compile(r'^([A-Za-z]+)\d+')
+
+
+def pool_group_letter(white, dark):
+    """If both (already-collapsed) tokens belong to the *same* LET group (whether bare
+    slots or seeds), this game determines that group's standings -- returns the shared
+    group letter, else None."""
+    mw, md = CC_GROUP_LETTER_RE.match(white), CC_GROUP_LETTER_RE.match(dark)
+    if mw and md and mw.group(1) == md.group(1):
+        return mw.group(1)
+    return None
+
+
+def normalize_clubchamps_token(raw):
+    s = (raw or '').strip()
+    # Unlike the old format ("A1-STANFORD", never spaced), this sheet inconsistently writes
+    # slot tokens with spaces around the hyphen ("B1 -  LAMORINDA" alongside "A1-NEWPORT" in
+    # the same column) -- collapse that whitespace first so the shared TOKEN_RE/SLOT_TOKEN_RE
+    # (and resolver.js's splitToken) see one consistent "{HEAD}-{TEAM}" shape either way.
+    s = re.sub(r'\s*-\s*', '-', s)
+    m = CC_WINNER_LOSER_RE.match(s)
+    if m:
+        letter = 'W' if m.group(1).upper() == 'WINNER' else 'L'
+        return f'{letter}#{m.group(2)}{m.group(3)}'
+    m = CC_DASHPAREN_SEED_RE.match(s)
+    if m:
+        slot, ord_, group, team = m.group(1), m.group(2), m.group(3), m.group(4).strip()
+        return f'{slot}({ord_}{group})-{team}'
+    m = CC_NOPAREN_SEED_RE.match(s)
+    if m:
+        slot, ord_, group, team = m.group(1), m.group(2), m.group(3), m.group(4).strip()
+        return f'{slot}({ord_}{group})-{team}'
+    return s
+
+
+def build_clubchamps_tournament_data(tournament_id, cfg):
+    all_games = []
+    teams = {}  # (name, division) -> True
+    for source in cfg['sources']:
+        division = source['division']
+        print(f'[{tournament_id}] fetching {division} from sheet {source["sheet_id"]}...')
+        csv_text = fetch_sheet_csv(source['sheet_id'], '')
+        rows = list(csv.reader(io.StringIO(csv_text)))
+        if not rows:
+            raise RuntimeError(f'empty sheet response for {division}')
+        header = [h.strip().upper() for h in rows[0]]
+        loc_idx = header.index('LOCATION')
+        time_idx = header.index('TIME')
+        white_idx = header.index('WHITE TEAM')
+        dark_idx = header.index('DARK TEAM')
+        comments_idx = header.index('COMMENTS')
+        s_cols = [i for i, h in enumerate(header) if h == 'S']
+        white_score_idx, dark_score_idx = s_cols[0], s_cols[1]
+        date_idx = 0  # the DATE header cell is polluted with a weekly banner string
+
+        # Pass 1: clean rows + capture each row's *official* GAME# stamp, if any. The stamp
+        # is NOT row-order (confirmed against the live sheet: e.g. 18U_GIRLS row 1 is stamped
+        # "GAME #7" while row 8 is stamped "GAME #1") -- it's the bracket's own numbering,
+        # and WINNER #N / LOSER #N refs point at that number, not at sheet position. So the
+        # stamp must be trusted directly rather than re-numbered by row order.
+        cleaned = []
+        for r in rows[1:]:
+            if not any((c or '').strip() for c in r):
+                continue
+            if len(r) <= dark_idx:
+                continue
+            if (r[loc_idx] or '').strip().upper() == CC_HEADER_REPEAT:
+                continue
+            if (r[dark_idx] or '').strip().upper() == CC_BOGUS_DARK:
+                continue
+            white_raw = (r[white_idx] or '').strip()
+            dark_raw = (r[dark_idx] or '').strip()
+            if not white_raw and not dark_raw:
+                continue
+            comments = (r[comments_idx] or '').strip()
+            stamp_m = CC_GAME_STAMP_RE.search(comments)
+            cleaned.append({
+                'row': r, 'white_raw': white_raw, 'dark_raw': dark_raw,
+                'comments': comments, 'stamp': int(stamp_m.group(1)) if stamp_m else None,
+            })
+
+        # Pass 2: assign each row a number. Stamped rows keep their official number (this is
+        # what WINNER#/LOSER# refs resolve against); unstamped rows (pool play -- never
+        # referenced by number) get the next number from a range well clear of any stamp seen
+        # in this division, so they can never collide with a real stamped number.
+        max_stamp = max((c['stamp'] for c in cleaned if c['stamp'] is not None), default=0)
+        next_unstamped = max(max_stamp, 99) + 1
+        used_numbers = set()
+        for c in cleaned:
+            num = c['stamp']
+            if num is None or num in used_numbers:
+                num = next_unstamped
+                next_unstamped += 1
+            used_numbers.add(num)
+
+            r = c['row']
+            ws_raw = (r[white_score_idx] or '').strip()
+            ds_raw = (r[dark_score_idx] or '').strip()
+            played = ws_raw != '' and ds_raw != ''
+            round_label = CC_GAME_STAMP_RE.sub('', c['comments']).strip()
+            white = normalize_clubchamps_token(c['white_raw'])
+            dark = normalize_clubchamps_token(c['dark_raw'])
+            if not round_label:
+                # Unlike the old format (COMMENTS always said e.g. "B bracket B1,B3" for pool
+                # play), this sheet leaves pool-play COMMENTS blank -- src/resolver.js's
+                # round-robin detector requires the literal word "bracket"/"RR" in the round
+                # label, so a same-letter bare-slot-vs-bare-slot game (the only shape pool
+                # play ever takes here) is tagged the same way the old format already does.
+                pool_let = pool_group_letter(white, dark)
+                if pool_let:
+                    round_label = f'{pool_let} bracket'
+            all_games.append({
+                'date': parse_date_mdy(r[date_idx]),
+                'time': (r[time_idx] or '').strip(),
+                'location': (r[loc_idx] or '').strip(),
+                'game_id': f'{division}-{num:03d}',
+                'white': white,
+                'white_score': float(ws_raw) if played else None,
+                'dark': dark,
+                'dark_score': float(ds_raw) if played else None,
+                'round': round_label,
+                'division': division,
+                'played': played,
+            })
+            for tok in (white, dark):
+                name = extract_team_name(tok)
+                if name:
+                    teams[(name, division)] = True
+
+    team_list = [{'name': n, 'division': d} for (n, d) in sorted(teams.keys())]
+    print(f'[{tournament_id}] {len(all_games)} games, {len(team_list)} teams across '
+          f'{len(cfg["sources"])} divisions')
+    return {
+        'tournament': cfg['label'],
+        'generated': datetime.now(timezone.utc).isoformat(),
+        'games': all_games,
+        'teams': team_list,
+    }
+
+
 def write_data_file(tournament_id, data):
     DATA_DIR.mkdir(exist_ok=True)
     out_path = DATA_DIR / f'{tournament_id}.js'
@@ -152,7 +339,14 @@ def main():
         if tid not in sources:
             print(f'Unknown tournament id "{tid}" -- check tools/sources.json', file=sys.stderr)
             sys.exit(1)
-        data = build_tournament_data(tid, sources[tid])
+        cfg = sources[tid]
+        if cfg.get('status') == 'completed':
+            print(f'[{tid}] completed -- skipping refresh (data is frozen)')
+            continue
+        if 'sources' in cfg:
+            data = build_clubchamps_tournament_data(tid, cfg)
+        else:
+            data = build_tournament_data(tid, cfg)
         write_data_file(tid, data)
 
 

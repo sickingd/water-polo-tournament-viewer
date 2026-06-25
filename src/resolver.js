@@ -37,7 +37,12 @@
 
   function localNumber(gameId) {
     const m = /^\d+GD\d(\d+)$/.exec(gameId || '');
-    return m ? parseInt(m[1], 10) : null;
+    if (m) return parseInt(m[1], 10);
+    // Fallback for other game_id schemes (e.g. the Club Championships ingestion's
+    // "{DIVISION}-{NNN}" ids) -- not every tournament's id shape matches the pattern above,
+    // so any trailing run of digits is still sortable.
+    const generic = /(\d+)$/.exec(gameId || '');
+    return generic ? parseInt(generic[1], 10) : null;
   }
 
   // Canonical, order-independent key for a cross-group finish pair, e.g. (1,"E"),(2,"F") -> "1E,2F".
@@ -151,6 +156,10 @@
       if (tok.type === 'progress') out.push({ key: 'ref:' + tok.ref.toLowerCase(), wl: tok.wl });
       else if (tok.type === 'progressPair') out.push({ key: 'pair:' + tok.let.toUpperCase() + ':' + [tok.a, tok.b].sort().join(','), wl: tok.wl });
       else if (tok.type === 'finishPair') out.push({ key: 'finishpair:' + finishPairKey(tok.ord1, tok.let1, tok.ord2, tok.let2), wl: tok.wl });
+      // A bare/wrapped group finish ("2ndE", or "K1(2ndE)"'s wrapped source) is also a
+      // feeder reference -- unlike W#/L#, there's no win/lose direction (the Nth-place team
+      // is just whoever it is), so `wl` is null and lookups against this key ignore it.
+      else if (tok.type === 'finish') out.push({ key: 'finish:' + tok.ord + tok.let.toUpperCase(), wl: null });
       else if (tok.type === 'seed') tok.sources.forEach((s) => collectProgressRefs(s, out));
     }
     parsedGames.forEach((entry) => {
@@ -408,6 +417,40 @@
     }) || null;
   }
 
+  // Reverse lookup: which game (and which of its two sides) has a token that names this
+  // exact group finish as its source -- e.g. "2ndE" finds the game whose white/dark is
+  // "2ndE" directly, or a seed like "K1(2ndE)" wrapping it. Built from the same refIndex
+  // buildDivision already populates for W#/L# refs; finish refs there carry wl: null since
+  // there's no win/lose direction, so any indexed entry is the (single, expected) answer.
+  function findFeederGameForFinish(ctx, ord, let_) {
+    const refs = ctx.division.refIndex.get('finish:' + ord + let_.toUpperCase());
+    return refs && refs.length ? refs[0] : null;
+  }
+
+  // Every seeded position in a standings-tracked group (e.g. A1, A2, A3...), each resolved
+  // to whatever's currently knowable -- a real team name once locked, otherwise the same
+  // plain-language hint the source spreadsheet's own legend shows ("1st of Group A"). Lets
+  // the Bracket tab show a group's eventual entrants before any of its games are cached with
+  // a real name -- `computeGroupStandings` only populates `ranked` from each token's *raw*
+  // cached team text, which seed-based entrants (e.g. "K1(1stC)") never have until their
+  // source group finishes and the spreadsheet's own formula catches up.
+  function groupEntrants(ctx, let_) {
+    const group = ctx.standings[let_];
+    if (!group) return [];
+    const byPos = new Map();
+    group.games.forEach((entry) => {
+      [entry.white, entry.dark].forEach((tok) => {
+        if ((tok.type === 'slot' || tok.type === 'seed') && tok.let === let_) byPos.set(tok.pos, tok);
+      });
+    });
+    return Array.from(byPos.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([pos, tok]) => {
+        const r = resolveToken(tok, ctx, 0);
+        return { pos, name: r.team || r.hint || `${let_}${pos}`, locked: !!r.team };
+      });
+  }
+
   // --- Public API ----------------------------------------------------------
 
   // When a result is an unresolved placeholder pointing at a specific feeder game (e.g.
@@ -454,10 +497,87 @@
     return { games: resolvedGames, standings, ctx };
   }
 
+  // --- Forward-walk helpers shared by buildScenarios and buildAllPossibleGames -----------
+  // None of these close over a particular team -- they operate purely on `division`/`entry`
+  // -- so both the single-path ("Path to the Finish") and exhaustive ("all possible future
+  // games") walks below can share them.
+
+  function nextGameAfter(division, entry, wl) {
+    const keys = [];
+    if (entry.roundName) keys.push('ref:' + entry.roundName.toLowerCase());
+    if (entry.localNum != null) keys.push('ref:' + entry.localNum);
+    // A placement semi (e.g. white=N1(...), dark=N4(...)) is referenced downstream as
+    // "W#/L#N1/N4" -- derive that pair key from the game's own seed tokens.
+    if (entry.white.type === 'seed' && entry.dark.type === 'seed' && entry.white.let === entry.dark.let) {
+      keys.push('pair:' + entry.white.let.toUpperCase() + ':' + [entry.white.pos, entry.dark.pos].sort().join(','));
+    }
+    // Likewise a cross-group placement semi (e.g. white=1stE, dark=2ndF) is referenced
+    // downstream as "W#/L#1E/2F" -- derive that finish-pair key the same way.
+    if (entry.white.type === 'finish' && entry.dark.type === 'finish') {
+      keys.push('finishpair:' + finishPairKey(entry.white.ord, entry.white.let, entry.dark.ord, entry.dark.let));
+    }
+    for (const key of keys) {
+      const refs = division.refIndex.get(key);
+      if (!refs) continue;
+      const hit = refs.find((r) => r.wl === wl);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  // Some brackets relay a crossover result forward via group *finish* rather than a W#/L#
+  // reference at all: a "mini-group" like K (just one game, two entrants) determines "1stK"/
+  // "2ndK" the moment it's played, and the *next* round references that finish directly
+  // (e.g. "X2-(1stK)"), never "W#121". A real multi-game pool can't be collapsed this way --
+  // 1st/2nd there depends on every result in the group, not just one game -- so this only
+  // fires for a group that is exactly one game between exactly two teams.
+  function nextGameAfterByGroupFinish(ctx, entry, wl) {
+    const wlet = (entry.white.type === 'slot' || entry.white.type === 'seed') && entry.white.let;
+    const dlet = (entry.dark.type === 'slot' || entry.dark.type === 'seed') && entry.dark.let;
+    if (!wlet || wlet !== dlet) return null;
+    const group = ctx.standings[wlet];
+    // `group.size` (the count of *named* teams seen so far) is unreliable here -- these
+    // mini-groups' entrants are seed tokens with no cached team until their own source
+    // group finishes, so computeGroupStandings can't populate records for them even once
+    // played. `games.length` doesn't have that problem: it's a count of *scheduled* games
+    // for this letter, fixed by the bracket's structure from the start -- a real 3+-team
+    // pool always schedules 3+ games, so exactly one here reliably means "two entrants,
+    // one game", independent of whether anyone's name is resolvable yet.
+    if (!group || group.games.length !== 1) return null;
+    return findFeederGameForFinish(ctx, wl === 'W' ? 1 : 2, wlet);
+  }
+
+  // Combines both forward-reference mechanisms a game might be followed by -- try the
+  // explicit W#/L# index first, then the implicit two-team-group-finish relay above.
+  function nextGameAfterAny(ctx, entry, wl) {
+    return nextGameAfter(ctx.division, entry, wl) || nextGameAfterByGroupFinish(ctx, entry, wl);
+  }
+
+  function terminalPlace(entry, wl) {
+    // Prefix match, not anchored at the end -- terminal-game round labels often carry a
+    // trailing matchup suffix (e.g. "1st 1v2", "7th 7v8") that finalPlacementFor (in the
+    // app, for already-decided games) already ignores the same way.
+    const m = /^(\d+)(st|nd|rd|th)/i.exec((entry.raw.round || '').trim());
+    if (m) {
+      const place = parseInt(m[1], 10);
+      return wl === 'W' ? place : place + 1;
+    }
+    return null;
+  }
+
+  // Placement brackets like "17-20 RR K1,K4" or "21-24 RR M2,M3" are 4-team round robins,
+  // not single-elimination -- there's no single win/lose branch to the next game (the
+  // final rank depends on all those games together). But the bracket's own label already
+  // bounds the placement, so use that directly instead of leaving floor/ceiling unknown.
+  function rrPlacementRange(entry) {
+    const m = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec((entry.raw.round || '').trim());
+    return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null;
+  }
+
   // Build the forward decision tree for a team: starting from whichever upcoming game
   // they currently occupy a locked slot in, recurse through win/lose branches using the
   // reverse reference index until hitting a terminal placement.
-  function buildScenarios(ctx, teamName) {
+  function buildScenarios(ctx, teamName, totalTeams) {
     const division = ctx.division;
     // Find every NOT-final game where this team is a locked participant, pick the earliest
     // unresolved one chronologically as "current".
@@ -501,50 +621,6 @@
       return { mine, opp };
     }
 
-    function nextGameAfter(entry, wl) {
-      const keys = [];
-      if (entry.roundName) keys.push('ref:' + entry.roundName.toLowerCase());
-      if (entry.localNum != null) keys.push('ref:' + entry.localNum);
-      // A placement semi (e.g. white=N1(...), dark=N4(...)) is referenced downstream as
-      // "W#/L#N1/N4" -- derive that pair key from the game's own seed tokens.
-      if (entry.white.type === 'seed' && entry.dark.type === 'seed' && entry.white.let === entry.dark.let) {
-        keys.push('pair:' + entry.white.let.toUpperCase() + ':' + [entry.white.pos, entry.dark.pos].sort().join(','));
-      }
-      // Likewise a cross-group placement semi (e.g. white=1stE, dark=2ndF) is referenced
-      // downstream as "W#/L#1E/2F" -- derive that finish-pair key the same way.
-      if (entry.white.type === 'finish' && entry.dark.type === 'finish') {
-        keys.push('finishpair:' + finishPairKey(entry.white.ord, entry.white.let, entry.dark.ord, entry.dark.let));
-      }
-      for (const key of keys) {
-        const refs = division.refIndex.get(key);
-        if (!refs) continue;
-        const hit = refs.find((r) => r.wl === wl);
-        if (hit) return hit;
-      }
-      return null;
-    }
-
-    function terminalPlace(entry, wl) {
-      // Prefix match, not anchored at the end -- terminal-game round labels often carry a
-      // trailing matchup suffix (e.g. "1st 1v2", "7th 7v8") that finalPlacementFor (in the
-      // app, for already-decided games) already ignores the same way.
-      const m = /^(\d+)(st|nd|rd|th)/i.exec((entry.raw.round || '').trim());
-      if (m) {
-        const place = parseInt(m[1], 10);
-        return wl === 'W' ? place : place + 1;
-      }
-      return null;
-    }
-
-    // Placement brackets like "17-20 RR K1,K4" or "21-24 RR M2,M3" are 4-team round robins,
-    // not single-elimination -- there's no single win/lose branch to the next game (the
-    // final rank depends on all those games together). But the bracket's own label already
-    // bounds the placement, so use that directly instead of leaving floor/ceiling unknown.
-    function rrPlacementRange(entry) {
-      const m = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec((entry.raw.round || '').trim());
-      return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null;
-    }
-
     function walk(entry, depth, mySide) {
       if (depth > 8) return { opponentHint: 'TBD', terminal: true, placeRange: null };
       const { opp } = describeOpponent(entry, mySide);
@@ -571,8 +647,8 @@
       }
       const winPlace = terminalPlace(entry, 'W');
       const losePlace = terminalPlace(entry, 'L');
-      const nextWin = nextGameAfter(entry, 'W');
-      const nextLose = nextGameAfter(entry, 'L');
+      const nextWin = nextGameAfterAny(ctx, entry, 'W');
+      const nextLose = nextGameAfterAny(ctx, entry, 'L');
 
       node.onWin = nextWin ? walk(nextWin.game, depth + 1, nextWin.side) : (winPlace ? { terminal: true, place: winPlace } : { terminal: true, placeRange: null });
       node.onLose = nextLose ? walk(nextLose.game, depth + 1, nextLose.side) : (losePlace ? { terminal: true, place: losePlace } : { terminal: true, placeRange: null });
@@ -588,12 +664,162 @@
       collect(n.onWin); collect(n.onLose);
     })(tree);
 
+    // When the team's current game is still pool play, there's no W#/L# reference chain to
+    // walk yet (pool games are referenced by group *finish*, e.g. "1stA", never by their own
+    // individual winner/loser) -- `leaves` comes back empty even though the team obviously
+    // still has a placement to play for. Rather than report "unknown", fall back to the
+    // full division range: with zero results locking anything in, every team can still
+    // finish anywhere from 1st to last. `totalTeams` is optional (existing callers that
+    // don't pass it keep today's `null` behavior) and only used when nothing more specific
+    // was found.
     return {
       tree,
-      floor: leaves.length ? Math.max(...leaves) : null,
-      ceiling: leaves.length ? Math.min(...leaves) : null,
+      floor: leaves.length ? Math.max(...leaves) : (totalTeams || null),
+      ceiling: leaves.length ? Math.min(...leaves) : (totalTeams ? 1 : null),
     };
   }
 
-  global.Resolver = { resolveDivision, buildScenarios, parseToken, localNumber };
+  // Does this game belong to a round-robin group that hasn't finished yet? Used to tell a
+  // genuine pool-play game (no individual W#/L# reference exists for it -- it's not a
+  // branch point) apart from a real bracket game, for buildAllPossibleGames below.
+  function pendingPoolGame(ctx, entry) {
+    const wl = (entry.white.type === 'slot' || entry.white.type === 'seed') && entry.white.let;
+    const dl = (entry.dark.type === 'slot' || entry.dark.type === 'seed') && entry.dark.let;
+    const let_ = wl && dl && wl === dl ? wl : null;
+    if (!let_) return false;
+    const group = ctx.standings[let_];
+    return !!(group && !group.complete);
+  }
+
+  // Find the group letter a team was originally seeded into, via its concrete day-1 slot
+  // token (e.g. "A1-NEWPORT" -> "A") -- the one token type that's always a fixed assignment,
+  // never a computed/wrapped reference.
+  function findTeamGroupLetter(division, teamName) {
+    for (const entry of division.games) {
+      if (entry.white.type === 'slot' && entry.white.team === teamName) return entry.white.let;
+      if (entry.dark.type === 'slot' && entry.dark.team === teamName) return entry.dark.let;
+    }
+    return null;
+  }
+
+  // Every game a team could *possibly* still play, with the full path of outcomes that
+  // would have to happen to get there -- not just the next one or two games (that's
+  // buildScenarios above), but the complete forward tree, flattened into a list. While a
+  // team's pool is still incomplete, there's no single "current" bracket entry yet, so this
+  // enumerates every possible finish (1st..Nth in their group) as a separate hypothetical
+  // root and walks forward from each; once seeding is locked in, there's exactly one real
+  // root and this is equivalent to fully expanding buildScenarios's tree.
+  //
+  // Two shapes of "what's next" both have to be handled, and a group can legitimately be
+  // either: a 2-team single-game relay (K, L, M... -- win/lose maps directly onto 1st/2nd,
+  // handled by nextGameAfterAny) versus a genuine multi-team round robin (e.g. group T,
+  // 4 entrants who each play the other 3) where there's no win/lose branch at all -- every
+  // one of those games happens regardless, and what comes *after* depends on the whole
+  // group's eventual standings, not any single result.
+  function buildAllPossibleGames(ctx, teamName) {
+    const division = ctx.division;
+    const results = [];
+
+    function describeOpponentBySide(entry, mySide) {
+      const w = resolveToken(entry.white, ctx, 0);
+      const d = resolveToken(entry.dark, ctx, 0);
+      return mySide === 'white' ? d : w;
+    }
+
+    function pushGameNode(entry, mySide, path) {
+      const opp = describeOpponentBySide(entry, mySide);
+      const node = {
+        path,
+        gameId: entry.raw.game_id,
+        date: entry.raw.date,
+        time: entry.raw.time,
+        location: entry.raw.location,
+        opponent: labelWithMatchup(opp, ctx, 'TBD'),
+        opponentLocked: !!opp.team,
+        round: entry.raw.round,
+      };
+      results.push(node);
+      return node;
+    }
+
+    // Every scheduled game for one specific seeded position (e.g. every game "T2" plays) --
+    // a position keeps the same identity across all of them, so they're siblings, not
+    // branches of each other.
+    function gamesForPosition(let_, pos) {
+      return division.games.filter((e) => {
+        const w = e.white, d = e.dark;
+        return ((w.type === 'slot' || w.type === 'seed') && w.let === let_ && w.pos === pos) ||
+          ((d.type === 'slot' || d.type === 'seed') && d.let === let_ && d.pos === pos);
+      });
+    }
+    function sideOfPosition(entry, let_, pos) {
+      const w = entry.white;
+      return ((w.type === 'slot' || w.type === 'seed') && w.let === let_ && w.pos === pos) ? 'white' : 'dark';
+    }
+
+    // Walk forward from one already-decided single game via depth-first win/lose -- the
+    // single-path case, generalized to also relay through a 2-team finish-only mini-group.
+    function walkSingleGame(entry, mySide, path, depth) {
+      if (depth > 14) return;
+      const node = pushGameNode(entry, mySide, path);
+      const rrRange = rrPlacementRange(entry);
+      if (rrRange) { node.rrRange = rrRange; return; }
+      if (entry.final) return;
+      const winPlace = terminalPlace(entry, 'W');
+      const losePlace = terminalPlace(entry, 'L');
+      const nextWin = nextGameAfterAny(ctx, entry, 'W');
+      const nextLose = nextGameAfterAny(ctx, entry, 'L');
+      if (nextWin) enterPosition(nextWin.game, nextWin.side, path.concat('Win this game'), depth + 1);
+      else if (winPlace) results.push({ path: path.concat('Win this game'), terminal: true, place: winPlace });
+      if (nextLose) enterPosition(nextLose.game, nextLose.side, path.concat('Lose this game'), depth + 1);
+      else if (losePlace) results.push({ path: path.concat('Lose this game'), terminal: true, place: losePlace });
+    }
+
+    // Entering at (game, side): if that side is a seeded position with more than one
+    // scheduled game, it's a genuine multi-team pool -- list every game that position plays
+    // (siblings, not branches), then recurse into the pool's own possible finishes (each
+    // entrant could end up anywhere in the group, same idea as the top-level enumeration
+    // below). Otherwise it's a single game, walked the normal way.
+    function enterPosition(entry, side, path, depth) {
+      if (depth > 14) return;
+      const tok = entry[side];
+      if (tok.type !== 'slot' && tok.type !== 'seed') { walkSingleGame(entry, side, path, depth); return; }
+      const sibs = gamesForPosition(tok.let, tok.pos);
+      if (sibs.length <= 1) { walkSingleGame(entry, side, path, depth); return; }
+      sibs.forEach((g) => pushGameNode(g, sideOfPosition(g, tok.let, tok.pos), path));
+      groupEntrants(ctx, tok.let).forEach((_, idx) => {
+        const rank = idx + 1;
+        const feeder = findFeederGameForFinish(ctx, rank, tok.let);
+        if (feeder) enterPosition(feeder.game, feeder.side, path.concat(`${ordWord(rank)} of Group ${tok.let}`), depth + 1);
+      });
+    }
+
+    const myGames = division.games.filter((e) => {
+      const w = resolveToken(e.white, ctx, 0);
+      const d = resolveToken(e.dark, ctx, 0);
+      return (w.team === teamName) || (d.team === teamName);
+    });
+    const realCurrent = myGames.filter((e) => !e.final).find((e) => !pendingPoolGame(ctx, e));
+    if (realCurrent) {
+      const w = resolveToken(realCurrent.white, ctx, 0);
+      const mySide = w.team === teamName ? 'white' : 'dark';
+      walkSingleGame(realCurrent, mySide, [], 0);
+      return results;
+    }
+
+    const let_ = findTeamGroupLetter(division, teamName);
+    const group = let_ && ctx.standings[let_];
+    // Only hypothesize finishes while the group is genuinely undecided. If it's already
+    // complete and there's still no realCurrent, the team's actual bracket run (locked in
+    // from its real finish) has already played all the way through -- nothing left to guess.
+    if (!group || group.complete) return results;
+    for (let ord = 1; ord <= group.size; ord++) {
+      const feeder = findFeederGameForFinish(ctx, ord, let_);
+      if (!feeder) continue;
+      enterPosition(feeder.game, feeder.side, [`${ordWord(ord)} in Group ${let_}`], 0);
+    }
+    return results;
+  }
+
+  global.Resolver = { resolveDivision, buildScenarios, buildAllPossibleGames, groupEntrants, parseToken, localNumber };
 })(typeof window !== 'undefined' ? window : globalThis);

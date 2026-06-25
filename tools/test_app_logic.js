@@ -59,6 +59,7 @@ function load(file) {
 load('src/resolver.js');
 load('data/manifest.js');
 load('data/2026-girls-futures-superfinals.js');
+load('data/2026-girls-us-club-championships.js');
 vm.runInContext(appJs, sandbox, { filename: 'tournament_app.html(inline)' });
 
 let failures = 0;
@@ -68,6 +69,26 @@ function check(label, cond) {
 
 check('initial My Team prompt shown', el('myTeamContent').innerHTML.includes('Choose Your Team'));
 
+// --- Multi-tournament manifest: Club Championships is "current" (LIVE), Superfinals is the
+// one frozen "Past" entry -- everything below this block re-selects Superfinals explicitly so
+// the existing Regency-based assertions keep testing the OLD tournament regardless of which
+// tournament the manifest marks as default/current.
+// `activeTournamentId`/`TD` are top-level `let`s in the inline script -- vm.runInContext
+// doesn't expose those as sandbox properties (only function/var declarations attach to the
+// context global), so check the default tournament indirectly via what renderHeader() wrote.
+check('Default tournament is the current one (Club Championships)',
+  el('tourneyLabel').textContent === '2026 Girls US Club Championships');
+vm.runInContext("openTourneyPicker()", sandbox);
+const tourneyPickerHtml = el('tourneyPickerList').innerHTML;
+check('Tournament picker shows LIVE chip on Club Championships',
+  /Club Championships[\s\S]*?LIVE/.test(tourneyPickerHtml));
+check('Tournament picker buckets Superfinals under Past Tournaments',
+  /Past Tournaments[\s\S]*Superfinals/.test(tourneyPickerHtml));
+check('Tournament picker does not show a LIVE chip on the frozen Superfinals entry',
+  !/Superfinals<\/div>[\s\S]{0,40}LIVE/.test(tourneyPickerHtml));
+vm.runInContext("closeTourneyPicker()", sandbox);
+
+vm.runInContext("selectTournament('2026-girls-futures-superfinals')", sandbox);
 vm.runInContext("selectTeam('REGENCY', '16U_GIRLS_D1')", sandbox);
 const myTeamHtml = el('myTeamContent').innerHTML;
 check('My Team header shows team name', el('favTeamName').textContent === 'REGENCY');
@@ -84,12 +105,20 @@ check('Bracket tab renders group tables', standingsHtml.includes('Group B'));
 check('Bracket tab does NOT show the Placement Tracker (moved to Tournament tab)', !standingsHtml.includes('Placement Tracker'));
 check('Bracket tab renders that division\'s game cards', standingsHtml.includes('game-card'));
 
-// Game# ordering within the Bracket tab's schedule, using the data-game-id attribute.
+// Chronological ordering within the Bracket tab's schedule, using the data-game-id attribute.
 // "16GD1xx" is 16U_GIRLS_D1; "16GD2xx" (16U_GIRLS_D2) also starts with "16GD" so the division
 // digit must be pinned, or this picks up both divisions' games interleaved.
 const div16GameIds = [...standingsHtml.matchAll(/data-game-id="(16GD1\d+)"/g)].map((m) => m[1]);
-const sortedCheck = div16GameIds.every((id, i) => i === 0 || sandbox.Resolver.localNumber(div16GameIds[i - 1]) <= sandbox.Resolver.localNumber(id));
-check('Bracket tab games are ordered by Game# (localNumber), ascending', sortedCheck && div16GameIds.length > 0);
+const div16Games = sandbox.TOURNAMENTS['2026-girls-futures-superfinals'].games;
+function chronoKeyFor(id) {
+  const g = div16Games.find((x) => x.game_id === id);
+  const m = (g.time || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+  let mins = 0;
+  if (m) { let h = parseInt(m[1], 10) % 12; if (/PM/i.test(m[3])) h += 12; mins = h * 60 + parseInt(m[2], 10); }
+  return (g.date || '') + ':' + String(mins).padStart(4, '0');
+}
+const chronoCheck = div16GameIds.every((id, i) => i === 0 || chronoKeyFor(div16GameIds[i - 1]) <= chronoKeyFor(id));
+check('Bracket tab games are ordered chronologically (date, then time)', chronoCheck && div16GameIds.length > 0);
 
 // Bracket switcher: viewing a division your favorite team isn't in should work standalone.
 vm.runInContext("selectBracket('18U_GIRLS_D1')", sandbox);

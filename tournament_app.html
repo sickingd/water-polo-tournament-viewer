@@ -66,6 +66,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 .game-time-col { text-align: center; min-width: 54px; }
 .game-number { display: inline-block; font-size: 11px; font-weight: 800; color: white; background: var(--blue); padding: 2px 6px; border-radius: 5px; letter-spacing: .02em; margin-bottom: 2px; }
+.game-date { font-size: 10px; font-weight: 600; color: var(--text-2); margin-top: 2px; }
 .game-time { font-size: 13px; font-weight: 600; color: var(--blue); }
 .game-loc { font-size: 10px; color: var(--text-2); margin-top: 1px; line-height: 1.2; }
 .game-loc-abbr { font-weight: 500; }
@@ -75,6 +76,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .team-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
 .team-name.fav { color: var(--blue); font-weight: 700; }
 .team-name.winner { font-weight: 700; }
+/* Projected-matchup labels ("Winner of H (MISSION vs SOCAL GOLD)") are far longer than a
+   real team name and have no score sibling to align with (unplayed games don't render one)
+   -- let them wrap instead of truncating, so the actual matchup stays readable. */
+.team-name.unresolved { white-space: normal; overflow: visible; text-overflow: unset; max-width: none; line-height: 1.35; }
 .team-score { font-size: 16px; font-weight: 700; min-width: 26px; text-align: right; }
 .team-score.winner { color: var(--green); }
 .team-score.loser { color: var(--red); }
@@ -174,6 +179,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .scenario-range-summary .rs-item:first-child { border-right: 1px solid var(--border); }
 .scenario-range-summary .rs-num { font-size: 22px; font-weight: 800; color: var(--blue); }
 .scenario-range-summary .rs-label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
+
+/* ALL POSSIBLE UPCOMING GAMES */
+.possible-games-section { background: white; margin: 12px; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.possible-games-header { background: var(--blue); color: white; padding: 10px 14px; font-size: 14px; font-weight: 600; }
+.possible-games-sub { font-size: 12px; color: var(--text-2); padding: 10px 14px 0; }
+.possible-path { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .03em; padding: 10px 14px 2px; }
+.possible-terminal { font-size: 13px; font-weight: 700; color: var(--text); background: var(--blue-light); padding: 6px 10px; border-radius: 8px; margin: 0 14px 10px; }
 
 /* PLACEMENT TRACKER */
 .tracker-card { background: white; margin: 12px; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
@@ -283,6 +295,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <script src="src/resolver.js"></script>
 <script src="data/manifest.js"></script>
 <script src="data/2026-girls-futures-superfinals.js"></script>
+<script src="data/2026-girls-us-club-championships.js"></script>
 <script>
 // --- Tournament selection ---
 const MANIFEST = window.TOURNAMENT_MANIFEST || [];
@@ -507,7 +520,8 @@ function renderMyTeam() {
   }
 
   // Future scenarios
-  html += scenarioCardHTML(resolved, favTeam);
+  const favDivTeamCount = TD.teams.filter((t) => t.division === favDiv).length;
+  html += scenarioCardHTML(resolved, favTeam, favDivTeamCount);
 
   // Games grouped by date
   const byDate = {};
@@ -521,7 +535,49 @@ function renderMyTeam() {
     dGames.forEach(g => { html += gameCardHTML(g, favTeam); });
   }
 
+  // Every game still possible -- not just the next one or two (that's the scenario card
+  // above), but the full forward tree, flattened into a list with the path of outcomes that
+  // would have to happen to reach each one. Shrinks on its own as results come in, since
+  // buildAllPossibleGames re-derives it from the live standings every render.
+  html += possibleGamesSectionHTML(resolved, favTeam);
+
   el.innerHTML = html;
+}
+
+function possibleGameNodeHTML(node) {
+  const pathLabel = node.path.length ? node.path.join(' → ') : 'Current group';
+  if (node.terminal) {
+    return `<div class="possible-path">${escapeHtml(pathLabel)}</div>
+      <div class="possible-terminal">Finishes ${ordWord(node.place)}</div>`;
+  }
+  return `<div class="possible-path">${escapeHtml(pathLabel)}</div>
+    <div class="game-card">
+      <div class="game-time-col">
+        <div class="game-number">${escapeHtml(node.gameId)}</div>
+        <div class="game-date">${formatDate(node.date)}</div>
+        <div class="game-time">${(node.time || '').replace(' AM', 'a').replace(' PM', 'p')}</div>
+        <div class="game-loc"><span class="game-loc-abbr">${abbrevLocation(node.location)}</span></div>
+      </div>
+      <div class="game-teams">
+        <div class="team-row">
+          <div class="team-name ${node.opponentLocked ? '' : 'unresolved'}">vs ${escapeHtml(node.opponent)}</div>
+        </div>
+        <div class="round-label">${escapeHtml(node.round || '')}</div>
+      </div>
+    </div>`;
+}
+
+function possibleGamesSectionHTML(resolved, team) {
+  const all = Resolver.buildAllPossibleGames(resolved.ctx, team);
+  const nodes = all.filter((n) => !n.terminal);
+  if (!nodes.length) return '';
+  let html = `<div class="possible-games-section">
+    <div class="possible-games-header">🧭 All Possible Upcoming Games</div>
+    <div class="possible-games-sub">Every game ${escapeHtml(team)} could still play in, and what
+      has to happen to get there. This list narrows on its own as results come in.</div>`;
+  nodes.forEach((n) => { html += possibleGameNodeHTML(n); });
+  html += `</div>`;
+  return html;
 }
 
 // --- Future scenarios ("Path to the Finish") ---
@@ -533,8 +589,8 @@ function ordWord(n) {
   return n + suffix;
 }
 
-function scenarioCardHTML(resolved, team) {
-  const scenario = Resolver.buildScenarios(resolved.ctx, team);
+function scenarioCardHTML(resolved, team, totalTeams) {
+  const scenario = Resolver.buildScenarios(resolved.ctx, team, totalTeams);
   if (!scenario) return '';
   let html = `<div class="scenario-card">
     <div class="scenario-header">🔮 Path to the Finish</div>
@@ -602,7 +658,7 @@ function renderStandings() {
   let html = viewingBarHTML();
 
   Object.keys(resolved.standings).sort().forEach((let_) => {
-    html += groupTableHTML(let_, resolved.standings[let_], viewingDivision);
+    html += groupTableHTML(let_, resolved.standings[let_], viewingDivision, resolved.ctx);
   });
 
   html += scheduleListHTML(viewingDivision);
@@ -610,21 +666,36 @@ function renderStandings() {
   el.innerHTML = html;
 }
 
-function groupTableHTML(let_, g, division) {
+function groupTableHTML(let_, g, division, ctx) {
   let html = `<div class="standings-card">
     <div class="standings-header">Group ${escapeHtml(let_)}${g.complete ? '' : ' <span class="group-strength">(in progress)</span>'}</div>
     <table class="standings-table">
       <thead><tr><th style="width:44%">Team</th><th>W</th><th>L</th><th>T</th><th>GD</th></tr></thead><tbody>`;
-  g.ranked.forEach((r, i) => {
-    const isFav = favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
-    const gd = r.gf - r.ga;
-    const gdStr = gd > 0 ? '+' + gd : gd;
-    html += `<tr class="${isFav ? 'my-team' : ''}">
-      <td><span class="rank-num">${i + 1}</span>${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}</td>
-      <td>${r.w}</td><td>${r.l}</td><td>${r.t}</td>
-      <td style="color:${gd >= 0 ? '#15803d' : '#b91c1c'}">${gdStr}</td>
-    </tr>`;
-  });
+  if (g.ranked.length) {
+    g.ranked.forEach((r, i) => {
+      const isFav = favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
+      const gd = r.gf - r.ga;
+      const gdStr = gd > 0 ? '+' + gd : gd;
+      html += `<tr class="${isFav ? 'my-team' : ''}">
+        <td><span class="rank-num">${i + 1}</span>${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}</td>
+        <td>${r.w}</td><td>${r.l}</td><td>${r.t}</td>
+        <td style="color:${gd >= 0 ? '#15803d' : '#b91c1c'}">${gdStr}</td>
+      </tr>`;
+    });
+  } else if (ctx) {
+    // This group's entrants are seed tokens (e.g. "K1(1stC)") with no cached team name yet --
+    // computeGroupStandings can't build real records for them until their source group
+    // finishes and the spreadsheet's own formula catches up. Show the same plain-language
+    // placeholder the spreadsheet's own legend uses ("1st of Group C") instead of an empty
+    // table, exactly like the source sheet's legend columns do.
+    Resolver.groupEntrants(ctx, let_).forEach((r) => {
+      const isFav = r.locked && favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
+      html += `<tr class="${isFav ? 'my-team' : ''}">
+        <td><span class="rank-num">${let_}${r.pos}</span>${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}</td>
+        <td>-</td><td>-</td><td>-</td><td>-</td>
+      </tr>`;
+    });
+  }
   html += `</tbody></table></div>`;
   return html;
 }
@@ -709,7 +780,7 @@ function placementTrackerHTML(resolved, division) {
 
   const rows = divTeams.map((t) => {
     const record = recordFor(resolved, t.name);
-    const scenario = Resolver.buildScenarios(resolved.ctx, t.name);
+    const scenario = Resolver.buildScenarios(resolved.ctx, t.name, divTeams.length);
     let floor = scenario ? scenario.floor : null;
     let ceiling = scenario ? scenario.ceiling : null;
     if (floor == null || ceiling == null) {
@@ -765,15 +836,10 @@ function placementTrackerHTML(resolved, division) {
 }
 
 // --- Bracket schedule (Bracket tab) ---
-// All of one division's games, ordered by Game# (not wall-clock time) -- within a single
-// bracket, Game# reflects that bracket's own logical flow (pool play, then crossovers, then
-// placement rounds), matching how the source spreadsheet's per-division tab lays games out.
+// All of one division's games in pure chronological order (date, then time-of-day) --
+// gameTS() already combines both into one sortable string.
 function scheduleListHTML(division) {
-  const games = [...getResolved(division).games].sort((a, b) => {
-    const an = Resolver.localNumber(a.game_id), bn = Resolver.localNumber(b.game_id);
-    if (an != null && bn != null) return an - bn;
-    return gameTS(a).localeCompare(gameTS(b));
-  });
+  const games = [...getResolved(division).games].sort((a, b) => gameTS(a).localeCompare(gameTS(b)));
   const byDate = {};
   games.forEach((g) => {
     if (!byDate[g.date]) byDate[g.date] = [];
@@ -840,12 +906,12 @@ function gameCardHTML(g, myTeam) {
     </div>
     <div class="game-teams">
       <div class="team-row">
-        <div class="team-name ${iAmWhite ? 'fav' : ''} ${wWins ? 'winner' : ''}">${escapeHtml(whiteLabel)}</div>
+        <div class="team-name ${iAmWhite ? 'fav' : ''} ${wWins ? 'winner' : ''} ${g.whiteLocked === false ? 'unresolved' : ''}">${escapeHtml(whiteLabel)}</div>
         ${g.played ? `<div class="team-score ${wWins ? 'winner' : dWins ? 'loser' : ''}">${formatScore(ws)}</div>` : ''}
       </div>
       <div class="vs-dot">vs</div>
       <div class="team-row">
-        <div class="team-name ${iAmDark ? 'fav' : ''} ${dWins ? 'winner' : ''}">${escapeHtml(darkLabel)}</div>
+        <div class="team-name ${iAmDark ? 'fav' : ''} ${dWins ? 'winner' : ''} ${g.darkLocked === false ? 'unresolved' : ''}">${escapeHtml(darkLabel)}</div>
         ${g.played ? `<div class="team-score ${dWins ? 'winner' : wWins ? 'loser' : ''}">${formatScore(ds)}</div>` : ''}
       </div>
       <div class="round-label">${badge} ${escapeHtml(g.round)}</div>
@@ -946,7 +1012,10 @@ function closeTourneyPicker(e) {
 }
 function renderTourneyPickerList() {
   const current = MANIFEST.filter((t) => t.status === 'current');
-  const past = MANIFEST.filter((t) => t.status !== 'current');
+  // Most-recent-first -- start_date is a plain 'YYYY-MM-DD' string, so a string sort is a
+  // chronological sort. Entries without one (shouldn't happen going forward) sort last.
+  const past = MANIFEST.filter((t) => t.status !== 'current')
+    .sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''));
   let html = '';
   if (current.length) {
     html += `<div class="picker-div-header">Current</div>`;

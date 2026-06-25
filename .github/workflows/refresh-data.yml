@@ -2,8 +2,9 @@
 # polling every ~1 minute server-side, see the project's hosting plan). GitHub Pages' fixed
 # 10-minute CDN cache made this pipeline structurally too slow for live play regardless of
 # how often it ran. This workflow's remaining job is a periodic durable snapshot: fast cold
-# loads, a permanent git history of scores over time, and (eventually) the mechanism that
-# freezes a tournament's data once it's marked completed.
+# loads, and a permanent git history of scores over time. tools/refresh_data.py itself skips
+# any tournament marked "completed" in tools/sources.json, so this no longer needs its own
+# hardcoded cutoff date -- freezing is per-tournament and status-driven.
 name: Refresh tournament data (periodic snapshot)
 
 on:
@@ -18,33 +19,16 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Check tournament cutoff
-        id: cutoff
-        run: |
-          # 8:00 PM PDT Sunday 2026-06-21
-          cutoff="2026-06-22T03:00:00Z"
-          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          if [[ "$now" > "$cutoff" ]]; then
-            echo "Past cutoff ($cutoff UTC) -- skipping refresh."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.cutoff.outputs.skip == 'false'
 
       - uses: actions/setup-python@v5
-        if: steps.cutoff.outputs.skip == 'false'
         with:
           python-version: '3.x'
 
       - name: Refresh data
-        if: steps.cutoff.outputs.skip == 'false'
         run: python3 tools/refresh_data.py
 
       - name: Commit and push if changed
-        if: steps.cutoff.outputs.skip == 'false'
         run: |
           git config user.name "tournament-bot"
           git config user.email "actions@users.noreply.github.com"

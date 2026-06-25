@@ -4,6 +4,17 @@
     "year": 2026,
     "sheet_id": "1-aMiTwNJlRNLfQNne7W9Xo0Em6XH2YXm10Ofnnpio5w",
     "master_sheet_name": "MASTER BY DIVISION",
-    "status": "current"
+    "status": "completed"
+  },
+  "2026-girls-us-club-championships": {
+    "label": "2026 Girls US Club Championships",
+    "year": 2026,
+    "status": "current",
+    "sources": [
+      { "division": "12U_GIRLS", "sheet_id": "179y3JxNFgyWh3g66g2n1kyM6g-fIAO-WpMWuVIhVHgY" },
+      { "division": "14U_GIRLS", "sheet_id": "1G8qhNPbWSreO5MB4_DuX5J878rR_NYnpOfL6BYjGqpQ" },
+      { "division": "16U_GIRLS", "sheet_id": "1VDtD_ofCmPwJenYQGDIHMXkfdO55EU7kcj8XsImh1XY" },
+      { "division": "18U_GIRLS", "sheet_id": "1ok3A1J89hZqvufIFlzCkmmq5d46Yd5pog36JsDta_cI" }
+    ]
   }
 }

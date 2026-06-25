@@ -114,5 +114,76 @@ assertEqual(teamOne.gf - teamOne.ga, 0, 'Shootout goals excluded from goal diffe
 assertEqual(teamTwo.l, 1, 'Shootout loser (5.1) credited the loss');
 assertEqual(teamTwo.gf - teamTwo.ga, 0, 'Shootout loser also shows 0 goal differential, not -0.2');
 
+// Regression tests for the Club Championships ingestion's text-rewrite normalization
+// (tools/refresh_data.py's normalize_clubchamps_token / worker/index.js's
+// normalizeClubChampsToken). Those rewrites happen *before* tokens reach this file -- these
+// fixtures feed the resolver the already-rewritten canonical forms directly, proving the
+// shared, generic resolver needs no club-championships-specific awareness at all.
+const clubChampsGames = [
+  // Bare numeric progress refs ("WINNER #11"/"LOSER #11" -> "W#11"/"L#11"): the resolver
+  // already supports this exact shape (it was built for 12U/14U D2's numeric W#/L# refs).
+  { date: '2026-06-26', time: '8:00 AM', location: 'X', game_id: '12U_GIRLS-011', white: 'A1-TEAM A', white_score: 10, dark: 'A2-TEAM B', dark_score: 8, round: 'A bracket', division: '12U_GIRLS', played: true },
+  { date: '2026-06-26', time: '9:00 AM', location: 'X', game_id: '12U_GIRLS-100', white: 'W#11', white_score: null, dark: 'TBD', dark_score: null, round: '', division: '12U_GIRLS', played: false },
+  // No-parens placement-seed form ("E1 -1st A - TEAM" -> "E1(1stA)-TEAM"): only the 12U
+  // sheet omits parens around the source; the resolver's `seed` token type expects them.
+  { date: '2026-06-26', time: '10:00 AM', location: 'X', game_id: '12U_GIRLS-101', white: 'E1(1stA)-TEAM A', white_score: null, dark: 'E3(2ndB)-', dark_score: null, round: '', division: '12U_GIRLS', played: false },
+];
+const clubChampsResult = global.Resolver.resolveDivision(clubChampsGames);
+const progressGame = clubChampsResult.games.find((g) => g.game_id === '12U_GIRLS-100');
+assertEqual(progressGame.whiteTeam, 'TEAM A', 'Rewritten "WINNER #11" (-> W#11) resolves against the game stamped #11');
+const seedGame = clubChampsResult.games.find((g) => g.game_id === '12U_GIRLS-101');
+assertEqual(seedGame.whiteTeam, 'TEAM A', 'Rewritten no-parens seed ("E1 -1st A - TEAM A" -> "E1(1stA)-TEAM A") trusts its own cached team');
+assertEqual(seedGame.darkLocked, false, 'Rewritten no-parens seed with no cached team ("E3(2ndB)-") stays unresolved, not a literal team named "2ndB"');
+
+// Regression test: localNumber() must keep matching the old "{n}GD{d}{num}" shape first
+// (unaffected by this addition) but also support other game_id schemes via a generic
+// trailing-digits fallback, e.g. the Club Championships ingestion's "{DIVISION}-{NNN}" ids.
+assertEqual(global.Resolver.localNumber('16GD133'), 33, 'localNumber still parses the old format exactly as before');
+assertEqual(global.Resolver.localNumber('12U_GIRLS-011'), 11, 'localNumber falls back to trailing digits for non-GD-shaped ids');
+assertEqual(global.Resolver.localNumber('not-a-game-id'), null, 'localNumber returns null when there are no trailing digits at all');
+
+// Regression test: before any games are played, a team's current game is plain pool play,
+// which is referenced downstream only by group *finish* ("1stA"), never by its own
+// individual W#/L#, so the forward walk from buildScenarios finds zero terminal leaves --
+// it must fall back to the *full* division range (every team can still finish anywhere from
+// 1st to last) rather than report no scenario at all. This is exactly the case the live
+// US Club Championships sheets hit on day zero, before any pool results exist.
+const freshPoolGames = [
+  { date: '2026-06-26', time: '8:00 AM', location: 'X', game_id: '18U_GIRLS-001', white: 'A1-TEAM A', white_score: null, dark: 'A2-TEAM B', dark_score: null, round: 'A bracket', division: '18U_GIRLS', played: false },
+  { date: '2026-06-26', time: '9:00 AM', location: 'X', game_id: '18U_GIRLS-002', white: 'A3-TEAM C', white_score: null, dark: 'A4-TEAM D', dark_score: null, round: 'A bracket', division: '18U_GIRLS', played: false },
+];
+const freshPoolResult = global.Resolver.resolveDivision(freshPoolGames);
+const freshScenario = global.Resolver.buildScenarios(freshPoolResult.ctx, 'TEAM A', 29);
+assertEqual(freshScenario.ceiling, 1, 'Day-zero team (no results yet) can still finish 1st -- ceiling 1');
+assertEqual(freshScenario.floor, 29, 'Day-zero team (no results yet) can still finish last of 29 -- floor 29');
+const freshScenarioNoCount = global.Resolver.buildScenarios(freshPoolResult.ctx, 'TEAM A');
+assertEqual(freshScenarioNoCount.floor, null, 'Omitting totalTeams keeps the old null-floor behavior (backward compatible)');
+
+// Regression test: buildAllPossibleGames must enumerate every hypothetical pool finish as
+// its own root, AND follow a "finish-relay" mini-group (a single 2-team game whose win/loss
+// becomes the next round's "1stK"/"2ndK" seed, with no W#/L# reference at all -- exactly how
+// the live US Club Championships 18U bracket relays crossover results) deeper than one level.
+// `computeGroupStandings` can't populate real team records for K here (its entrants are seed
+// tokens with no cached name until group A finishes), so this also locks in that the relay
+// must work off `games.length === 1`, not the (necessarily 0) `size`.
+const relayGames = [
+  { date: '2026-06-26', time: '8:00 AM', location: 'X', game_id: 'RELAY-001', white: 'A1-TEAM A', white_score: null, dark: 'A2-TEAM B', dark_score: null, round: 'A bracket', division: 'RELAY_TEST', played: false },
+  { date: '2026-06-26', time: '9:00 AM', location: 'X', game_id: 'RELAY-002', white: 'A1-TEAM A', white_score: null, dark: 'A3-TEAM C', dark_score: null, round: 'A bracket', division: 'RELAY_TEST', played: false },
+  { date: '2026-06-26', time: '10:00 AM', location: 'X', game_id: 'RELAY-003', white: 'A2-TEAM B', white_score: null, dark: 'A3-TEAM C', dark_score: null, round: 'A bracket', division: 'RELAY_TEST', played: false },
+  // Mini-group K: 1stA vs a fixed cached team (standing in for "the finish of some other pool").
+  { date: '2026-06-27', time: '8:00 AM', location: 'X', game_id: 'RELAY-004', white: 'K1(1stA)-', white_score: null, dark: 'K2(1stB)-TEAM Z', dark_score: null, round: 'K bracket', division: 'RELAY_TEST', played: false },
+  // Downstream of K's WINNER (1stK) -- no W#/L# ref anywhere, purely a finish relay.
+  { date: '2026-06-27', time: '9:00 AM', location: 'X', game_id: 'RELAY-005', white: 'X1(1stK)-', white_score: null, dark: 'TEAM W', dark_score: null, round: 'X bracket', division: 'RELAY_TEST', played: false },
+];
+const relayResult = global.Resolver.resolveDivision(relayGames);
+const relayAll = global.Resolver.buildAllPossibleGames(relayResult.ctx, 'TEAM A');
+assertEqual(relayAll.length, 2, 'Relay test: TEAM A has exactly 2 possible future games (1stA root + its win-branch)');
+assertEqual(relayAll[0].path.join(' > '), '1st in Group A', 'Relay test: root path describes the hypothetical pool finish');
+assertEqual(relayAll[0].gameId, 'RELAY-004', 'Relay test: 1stA feeds into the K mini-group game');
+assertEqual(relayAll[0].opponent, 'TEAM Z', 'Relay test: opponent at the entry game is the other (cached) K-group entrant');
+assertEqual(relayAll[1].path.join(' > '), '1st in Group A > Win this game', 'Relay test: deeper node carries the full cumulative path');
+assertEqual(relayAll[1].gameId, 'RELAY-005', 'Relay test: winning the K-group game relays forward via "1stK", not a W#/L# ref');
+assertEqual(relayAll[1].opponent, 'TEAM W', 'Relay test: deeper node resolves its own opponent');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
