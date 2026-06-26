@@ -13,3 +13,4 @@ package-lock.json
 CLAUDE.md
 DESIGN_NOTES.md
 TOURNAMENT_DATA_SPEC.md
+site-worker.js

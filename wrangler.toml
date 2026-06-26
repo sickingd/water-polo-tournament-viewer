@@ -2,6 +2,7 @@
 # (run from the repo root -- this is a separate project from worker/wrangler.toml, which
 # deploys the live-data API/cron Worker under the name "clubwaterpolo-live").
 name = "clubwaterpolo-site"
+main = "site-worker.js"
 compatibility_date = "2026-06-21"
 
 # Cloudflare resolves overlapping Worker routes by most-specific-pattern-wins, so this
@@ -17,3 +18,9 @@ routes = [
 
 [assets]
 directory = "."
+binding = "ASSETS"
+# Without this, Workers Static Assets serves matching files straight from its own asset
+# cache and never invokes fetch() below -- confirmed via `wrangler tail` showing zero
+# invocations for clubwaterpolo.com even after deploy. The redirect logic needs to run
+# first for every request; non-redirected hosts then fall through to env.ASSETS.fetch().
+run_worker_first = true
