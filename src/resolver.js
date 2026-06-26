@@ -36,7 +36,13 @@
   }
 
   function localNumber(gameId) {
-    const m = /^\d+GD\d(\d+)$/.exec(gameId || '');
+    // "{age}{G|B}D{division}{shorthand}" -- e.g. "16GD133" (Girls) or "16BD239" (Boys) --
+    // the single digit right after "D" is the division number, NOT part of the shorthand the
+    // spreadsheet's own W#/L# refs use (e.g. "W#39" means local number 39, not 239). The
+    // gender letter varies by tournament, so match either rather than hardcoding "GD" --
+    // that bug silently broke every bare-number W#/L# hop in any Boys-format bracket (group
+    // -finish and seed-pair refs don't go through this function, so those still resolved).
+    const m = /^\d+[A-Za-z]D\d(\d+)$/.exec(gameId || '');
     if (m) return parseInt(m[1], 10);
     // Fallback for other game_id schemes (e.g. the Club Championships ingestion's
     // "{DIVISION}-{NNN}" ids) -- not every tournament's id shape matches the pattern above,
