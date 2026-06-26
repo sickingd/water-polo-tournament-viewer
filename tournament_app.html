@@ -114,7 +114,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .picker-overlay.open { display: flex; align-items: flex-start; }
 .picker-sheet { background: white; width: 100%; max-height: 90vh; border-radius: 0 0 20px 20px; overflow: hidden; display: flex; flex-direction: column; }
 .picker-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 10px auto 0; }
-.picker-title { padding: 14px 16px 10px; font-size: 17px; font-weight: 700; border-bottom: 1px solid var(--border); }
+.picker-title { padding: 14px 16px 10px; font-size: 17px; font-weight: 700; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.picker-close-btn { background: var(--gray-light); border: none; color: var(--text-2); width: 28px; height: 28px; min-width: 28px; border-radius: 50%; font-size: 18px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.picker-close-btn:hover { background: var(--border); }
 .picker-search { padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .picker-search input { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 9px 14px; font-size: 16px; outline: none; background: var(--gray-light); }
 .picker-search input:focus { border-color: var(--blue); background: white; }
@@ -266,7 +268,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <div class="picker-overlay" id="pickerOverlay" onclick="closePicker(event)">
   <div class="picker-sheet" id="pickerSheet">
     <div class="picker-handle"></div>
-    <div class="picker-title">Choose Your Team ⭐</div>
+    <div class="picker-title"><span>Choose Your Team ⭐</span><button type="button" class="picker-close-btn" onclick="closePickerForce()" aria-label="Close">&times;</button></div>
     <div class="picker-search">
       <input type="text" id="searchInput" placeholder="Search teams..." oninput="filterTeams()" autocomplete="off" autocorrect="off" autocapitalize="off">
     </div>
@@ -278,7 +280,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <div class="picker-overlay" id="tourneyPickerOverlay" onclick="closeTourneyPicker(event)">
   <div class="picker-sheet" id="tourneyPickerSheet">
     <div class="picker-handle"></div>
-    <div class="picker-title">Choose Tournament</div>
+    <div class="picker-title"><span>Choose Tournament</span><button type="button" class="picker-close-btn" onclick="closeTourneyPicker()" aria-label="Close">&times;</button></div>
     <div class="picker-list" id="tourneyPickerList"></div>
   </div>
 </div>
@@ -287,7 +289,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <div class="picker-overlay" id="bracketPickerOverlay" onclick="closeBracketPicker(event)">
   <div class="picker-sheet" id="bracketPickerSheet">
     <div class="picker-handle"></div>
-    <div class="picker-title">Choose Bracket</div>
+    <div class="picker-title"><span>Choose Bracket</span><button type="button" class="picker-close-btn" onclick="closeBracketPicker()" aria-label="Close">&times;</button></div>
     <div class="picker-list" id="bracketPickerList"></div>
   </div>
 </div>
