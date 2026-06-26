@@ -5,7 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>Water Polo Tournament</title>
+<title>Splash Bracket</title>
+<link rel="icon" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
+<!-- Open Graph / link-preview tags (iMessage, Slack, etc. read these for the share card --
+     without them the preview is just a blank box with the bare <title>, as seen sharing the
+     old "Water Polo Tournament" title with no image at all). -->
+<meta property="og:title" content="Splash Bracket">
+<meta property="og:description" content="Live bracket, schedule, and results for your water polo tournament.">
+<meta property="og:image" content="https://splashbracket.com/logo.png">
+<meta property="og:url" content="https://splashbracket.com/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Splash Bracket">
+<meta name="twitter:description" content="Live bracket, schedule, and results for your water polo tournament.">
+<meta name="twitter:image" content="https://splashbracket.com/logo.png">
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YFCRZ39KRZ"></script>
 <script>
@@ -1088,8 +1102,10 @@ function selectTeam(name, div) {
   closePickerForce();
   renderHeader();
   renderMyTeam();
-  if (activeTab === 'standings') renderStandings();
-  if (activeTab === 'schedule') renderSchedule();
+  // Always land on My Team after picking -- staying on whatever tab they happened to be on
+  // (e.g. Bracket) made the picker feel like it silently did nothing, since that tab's
+  // content for a *different* team looks the same at a glance.
+  showTab('myTeam');
 }
 
 // --- Tournament Picker ---
