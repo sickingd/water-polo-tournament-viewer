@@ -111,16 +111,32 @@
     if ((m = /^([WL])#(.+)$/.exec(head))) {
       return { type: 'progress', wl: m[1], ref: m[2], team, raw };
     }
-    // ordinal group finish: 2ndB, 13thG
+    // ordinal group finish: 2ndB, 13thG -- can ALSO carry its own wrapped source(s), e.g.
+    // "3rdD(W#7)", needed whenever (like group D in 12U_BOYS_D2) the feeder games' own round
+    // label never marked them as round-robin/bracket play, so there's no standings entry for
+    // the letter at all and the group-finish notation is just a human label; the *real*
+    // resolution is the wrapped W#7 reference. Bare-numeric parens are filtered the same way
+    // a seed's sources are (see below) -- a human-readable seed-number annotation, not a ref.
     if ((m = /^(\d+(?:st|nd|rd|th))([A-Za-z]+)$/.exec(head))) {
-      return { type: 'finish', ord: ordToNum(m[1]), let: m[2], team, raw };
+      return {
+        type: 'finish', ord: ordToNum(m[1]), let: m[2], team, raw,
+        sources: parens.length ? parens.filter((p) => !/^\d+$/.test(p.trim())).map(parseToken) : undefined,
+      };
     }
     // {LET}{pos} with parenthetical source(s) -> a placement seed, e.g. "N1(L#Playin3)",
     // "K1(2ndE)", "E2(1stD)(W#14)" -- NOT a fixed slot, must resolve via its source(s).
     if (parens.length && (m = /^([A-Za-z]+)(\d+)$/.exec(head))) {
       return {
         type: 'seed', let: m[1], pos: parseInt(m[2], 10), team,
-        sources: parens.map(parseToken), raw,
+        // A bare-numeric paren (e.g. the trailing "(8)" in "J8(1stH)(8)") is just a
+        // human-readable overall-seed-number annotation, not a resolvable reference -- left
+        // in, it would fall through parseToken's final catch-all into a bogus
+        // {type:'team', team:'8'}. A 'team' token ALWAYS resolves as locked (that's correct
+        // for the real case it exists for, a literal cached team name), so this fake one
+        // would silently override the real (1stH)-style source the moment that source isn't
+        // resolvable yet -- resolveToken tries sources in order and stops at the first hit.
+        sources: parens.filter((p) => !/^\d+$/.test(p.trim())).map(parseToken),
+        raw,
       };
     }
     // concrete round-robin slot: A1, K3 (fixed from day-1 seeding, no source needed)
@@ -165,7 +181,15 @@
       // A bare/wrapped group finish ("2ndE", or "K1(2ndE)"'s wrapped source) is also a
       // feeder reference -- unlike W#/L#, there's no win/lose direction (the Nth-place team
       // is just whoever it is), so `wl` is null and lookups against this key ignore it.
-      else if (tok.type === 'finish') out.push({ key: 'finish:' + tok.ord + tok.let.toUpperCase(), wl: null });
+      else if (tok.type === 'finish') {
+        out.push({ key: 'finish:' + tok.ord + tok.let.toUpperCase(), wl: null });
+        // A finish token can ALSO carry its own wrapped source (e.g. "3rdD(W#7)") -- must
+        // recurse into it the same way 'seed' does just below, or nextGameAfter can never
+        // find this game from the W#7 side: only the 'finish:3D' key above would get
+        // registered, never 'ref:7', leaving the win/lose branch that feeds this game with
+        // no way to look it up.
+        if (tok.sources) tok.sources.forEach((s) => collectProgressRefs(s, out));
+      }
       else if (tok.type === 'seed') tok.sources.forEach((s) => collectProgressRefs(s, out));
     }
     parsedGames.forEach((entry) => {
@@ -432,7 +456,18 @@
           const clinched = clinchedRanks(g);
           if (clinched.has(tok.ord)) return { team: clinched.get(tok.ord), locked: true };
         }
-        return { team: null, locked: false, hint: `${ordWord(tok.ord)} of Group ${tok.let}` };
+        // A finish token's own wrapped source(s) (e.g. "3rdD(W#7)") can be the *only* way to
+        // resolve it at all -- whenever, like group D here, the feeder games were never
+        // tagged round-robin/bracket play in their own round label, ctx.standings has no
+        // entry for the letter whatsoever, so every check above is structurally unable to
+        // fire. Mirrors the 'seed' case's own source-walking just below.
+        let bestFinishHint = { hint: `${ordWord(tok.ord)} of Group ${tok.let}` };
+        for (const src of tok.sources || []) {
+          const r = resolveToken(src, ctx, depth + 1);
+          if (r.team) return r;
+          if (r.hint) bestFinishHint = r;
+        }
+        return { team: null, locked: false, hint: bestFinishHint.hint, feederGame: bestFinishHint.feederGame };
       }
       case 'progress': {
         const feeder = findFeederGame(ctx, tok.ref);
@@ -681,13 +716,28 @@
     return findFeederGameForFinish(ctx, base + (wl === 'W' ? 1 : 2), let_);
   }
 
+  // Same idea as nextGameAfterBySemiFinalLabel, different spelling: "1st/2ndH" or "3rd/4thD"
+  // (ordinal/ordinal+letter, no space) instead of "1/2 X"/"3/4 X". This shape's own tokens
+  // are usually W#/L# pair refs (e.g. "W#H1/H4") rather than {LET}{pos} seeds, so neither
+  // nextGameAfter nor nextGameAfterByGroupFinish has anywhere to look -- the LET and both
+  // ords only exist in the round label text itself. Also why terminalPlace deliberately does
+  // NOT treat this as an absolute placement (see its comment) -- it's relative to one
+  // feeder group, and this is that relativity's actual resolution path.
+  function nextGameAfterByRelativeLabel(ctx, entry, wl) {
+    const m = /^(\d+)(?:st|nd|rd|th)\/(\d+)(?:st|nd|rd|th)([A-Za-z]+)$/i.exec((entry.raw.round || '').trim());
+    if (!m) return null;
+    const ord = wl === 'W' ? parseInt(m[1], 10) : parseInt(m[2], 10);
+    return findFeederGameForFinish(ctx, ord, m[3].toUpperCase());
+  }
+
   // Combines every forward-reference mechanism a game might be followed by -- explicit
   // W#/L# index first, then the implicit two-team-group-finish relay, then the "1/2"/"3/4"
-  // mini-bracket label relay above.
+  // and "1st/2nd{LET}" mini-bracket label relays above.
   function nextGameAfterAny(ctx, entry, wl) {
     return nextGameAfter(ctx.division, entry, wl) ||
       nextGameAfterByGroupFinish(ctx, entry, wl) ||
-      nextGameAfterBySemiFinalLabel(ctx, entry, wl);
+      nextGameAfterBySemiFinalLabel(ctx, entry, wl) ||
+      nextGameAfterByRelativeLabel(ctx, entry, wl);
   }
 
   function terminalPlace(entry, wl) {
@@ -697,11 +747,20 @@
     // end right after the ordinal (rather than anchoring the whole pattern) is also what
     // excludes a *group-relative* label like "3rd/4thB" (3rd/4th within just one feeder
     // group, not an absolute tournament placement) from being mistaken for a real decider.
-    const m = /^(\d+)(st|nd|rd|th)(?=\s|$)/i.exec((entry.raw.round || '').trim());
+    const round = (entry.raw.round || '').trim();
+    const m = /^(\d+)(st|nd|rd|th)(?=\s|$)/i.exec(round);
     if (m) {
       const place = parseInt(m[1], 10);
       return wl === 'W' ? place : place + 1;
     }
+    // Some divisions instead label this kind of decider with the exact win/lose places
+    // spelled out directly, e.g. "9-16 9/13" (a context bound, then "winPlace/losePlace" for
+    // *this specific* game) -- not the simple "Nth"-implies-"Nth+1" shape above. Each game
+    // sharing the same outer bound decides a totally different, non-adjacent pair here
+    // (9/13, 10/14, 11/15, 12/16 are siblings, not the same game) -- a single shared range
+    // (rrPlacementRange) would be wrong, this is a real specific result per game.
+    const explicit = /^\d+\s*-\s*\d+\s+(\d+)\s*\/\s*(\d+)/.exec(round);
+    if (explicit) return wl === 'W' ? parseInt(explicit[1], 10) : parseInt(explicit[2], 10);
     return null;
   }
 
