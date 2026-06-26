@@ -576,10 +576,31 @@
     return findFeederGameForFinish(ctx, wl === 'W' ? 1 : 2, wlet);
   }
 
-  // Combines both forward-reference mechanisms a game might be followed by -- try the
-  // explicit W#/L# index first, then the implicit two-team-group-finish relay above.
+  // A 4-team mini-bracket (semis -> "1/2 {LET}" final + "3/4 {LET}" consolation) labels its
+  // own two cross games this way instead of via W#/L# numbers or a {LET}{pos} seed token --
+  // entry's own white/dark here are W#/L# refs into the semis (e.g. "W#13"/"W#14"), so
+  // neither nextGameAfter (no one references this game's own number) nor
+  // nextGameAfterByGroupFinish (this game's tokens aren't {LET}{pos} seeds, and the group's
+  // games.length is 2, not 1, since the semis are filed under the *same* letter) finds
+  // what comes next. The LET only exists in the round label itself: winning "1/2 X" makes
+  // you "1stX", losing makes you "2ndX" (and 3rd/4th likewise for "3/4 X") -- referenced
+  // downstream exactly like any other group finish (e.g. "AA2(1stX)"), so once the LET is
+  // pulled from the label, the existing finish index already has the answer.
+  function nextGameAfterBySemiFinalLabel(ctx, entry, wl) {
+    const m = /^(1\/2|3\/4)\s+([A-Za-z]+)$/i.exec((entry.raw.round || '').trim());
+    if (!m) return null;
+    const let_ = m[2].toUpperCase();
+    const base = m[1] === '1/2' ? 0 : 2;
+    return findFeederGameForFinish(ctx, base + (wl === 'W' ? 1 : 2), let_);
+  }
+
+  // Combines every forward-reference mechanism a game might be followed by -- explicit
+  // W#/L# index first, then the implicit two-team-group-finish relay, then the "1/2"/"3/4"
+  // mini-bracket label relay above.
   function nextGameAfterAny(ctx, entry, wl) {
-    return nextGameAfter(ctx.division, entry, wl) || nextGameAfterByGroupFinish(ctx, entry, wl);
+    return nextGameAfter(ctx.division, entry, wl) ||
+      nextGameAfterByGroupFinish(ctx, entry, wl) ||
+      nextGameAfterBySemiFinalLabel(ctx, entry, wl);
   }
 
   function terminalPlace(entry, wl) {
@@ -736,7 +757,15 @@
     const let_ = wl && dl && wl === dl ? wl : null;
     if (!let_) return false;
     const group = ctx.standings[let_];
-    return !!(group && !group.complete);
+    // A group with exactly one scheduled game (e.g. "J1 vs J2") isn't real pool play with no
+    // win/lose branch -- it's the same single-mini-game shape nextGameAfterByGroupFinish
+    // already treats as a genuine bracket game (see its comment), just not played yet. Only
+    // 2+ games make it a real round robin where the *group's* eventual standings (not this
+    // one result) decide the finish -- without this check, a team who has already clinched
+    // their group (their own games final) but whose mini-bracket game hasn't been played yet
+    // gets misclassified as still-pending pool play, and buildAllPossibleGames falls back to
+    // hypothesizing every possible group finish instead of the one already locked in.
+    return !!(group && !group.complete && group.games.length > 1);
   }
 
   // Find the group letter a team was originally seeded into, via its concrete day-1 slot
