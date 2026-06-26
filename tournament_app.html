@@ -405,7 +405,10 @@ function divNum(division) {
 function ageChipHTML(division) {
   const age = ageOf(division);
   if (!age) return '';
-  return `<span class="age-chip age-${age}">${age}</span><span class="div-chip">${divNum(division)}</span>`;
+  const dNum = divNum(division);
+  // Club Championships divisions (e.g. "12U_GIRLS") have no D-number at all -- a single
+  // division, not "D1" of several -- so the chip itself shouldn't render, not render empty.
+  return `<span class="age-chip age-${age}">${age}</span>${dNum ? `<span class="div-chip">${dNum}</span>` : ''}`;
 }
 
 // --- Header ---
@@ -1027,7 +1030,11 @@ adjustPickerSheetHeights();
 function openPicker() {
   document.getElementById('pickerOverlay').classList.add('open');
   adjustPickerSheetHeights();
-  renderPickerList('');
+  // Reflects whatever's still in the search box from last time (it's intentionally never
+  // cleared on close, so re-picking a team in another age group is just a re-tap away) --
+  // rendering the unfiltered list here regardless was the bug: the box showed old text but
+  // the results didn't match it until the user typed something new.
+  renderPickerList(document.getElementById('searchInput').value);
   setTimeout(() => document.getElementById('searchInput').focus(), 100);
 }
 function closePicker(e) {
