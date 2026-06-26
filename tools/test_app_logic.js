@@ -61,6 +61,7 @@ load('data/manifest.js');
 load('data/2026-girls-futures-superfinals.js');
 load('data/2026-girls-us-club-championships.js');
 load('data/2026-boys-us-club-championships.js');
+load('data/2026-boys-futures-superfinals.js');
 vm.runInContext(appJs, sandbox, { filename: 'tournament_app.html(inline)' });
 
 let failures = 0;
