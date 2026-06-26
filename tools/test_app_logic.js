@@ -15,7 +15,7 @@ if (!scriptMatches.length) throw new Error('could not find inline <script> body'
 const appJs = scriptMatches[scriptMatches.length - 1][1];
 
 class FakeEl {
-  constructor() { this.innerHTML = ''; this.textContent = ''; this._classes = new Set(); this.value = ''; }
+  constructor() { this.innerHTML = ''; this.textContent = ''; this._classes = new Set(); this.value = ''; this.style = {}; }
   get classList() {
     const self = this;
     return {

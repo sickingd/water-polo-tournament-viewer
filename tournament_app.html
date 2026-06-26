@@ -41,10 +41,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .header-title { font-size: 13px; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
 .header-name { font-size: 22px; font-weight: 700; margin-top: 2px; line-height: 1.2; }
 .header-div { font-size: 12px; opacity: .65; margin-top: 3px; }
-.header-row { display: flex; align-items: flex-start; justify-content: space-between; }
+.header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .pick-btn { background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3); color: white; border-radius: 20px; padding: 5px 13px; font-size: 13px; cursor: pointer; white-space: nowrap; margin-top: 4px; }
 .pick-btn:active { background: rgba(255,255,255,.28); }
 .last-updated { font-size: 11px; opacity: .6; margin-top: 8px; }
+/* Sits between the team-name block and the action buttons as a third flex child. flex-grow
+   is deliberately 0 -- a growing 0-basis item collapses to 0 width when the row has no spare
+   space (e.g. a long tournament title), but the img's explicit size doesn't shrink with it,
+   so it overflows and overlaps the buttons instead of disappearing. A fixed reserved slot
+   avoids that: the title/buttons absorb any squeeze via their own shrink/wrap, not this. */
+.header-logo { display: none; flex: 0 0 44px; justify-content: center; align-items: center; }
+.header-logo img { height: 44px; width: 44px; }
 
 /* TABS */
 .tabs { background: white; display: flex; border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 10; }
@@ -141,6 +148,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 .no-team-prompt { text-align: center; padding: 60px 24px; }
 .no-team-prompt .big { font-size: 56px; margin-bottom: 16px; }
+.no-team-prompt .logo { width: 72px; height: 72px; margin: 0 auto 16px; display: block; }
 .no-team-prompt h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
 .no-team-prompt p { color: var(--gray); font-size: 15px; margin-bottom: 24px; }
 .cta-btn { background: var(--blue); color: white; border: none; border-radius: 12px; padding: 14px 28px; font-size: 16px; font-weight: 600; cursor: pointer; }
@@ -231,6 +239,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
       <div class="header-name" id="favTeamName">Pick Your Team ⭐</div>
       <div class="header-chips" id="favTeamChips"></div>
     </div>
+    <div class="header-logo" id="headerLogo"><img src="logo.png" alt="SplashBracket"></div>
     <div class="header-actions">
       <button class="tourney-btn" onclick="openTourneyPicker()" id="tourneyBtn">Change Tournament</button>
       <button class="pick-btn" onclick="openPicker()">Change Team</button>
@@ -417,6 +426,7 @@ function renderHeader() {
     document.getElementById('favTeamName').textContent = 'Pick Your Team ⭐';
     document.getElementById('favTeamChips').innerHTML = '';
   }
+  document.getElementById('headerLogo').style.display = favTeam ? 'flex' : 'none';
   renderLastUpdated();
 }
 
@@ -473,7 +483,7 @@ function renderMyTeam() {
   const el = document.getElementById('myTeamContent');
   if (!favTeam) {
     el.innerHTML = `<div class="no-team-prompt">
-      <div class="big">🏊</div>
+      <img class="logo" src="logo.png" alt="SplashBracket">
       <h2>Choose Your Team</h2>
       <p>Tap below to pick your team and see all their games, results, and standings.</p>
       <button class="cta-btn" onclick="openPicker()">Pick My Team ⭐</button>
