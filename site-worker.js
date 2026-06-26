@@ -13,6 +13,14 @@ export default {
       url.hostname = 'splashbracket.com';
       return Response.redirect(url.toString(), 302);
     }
+    // Serve tournament_app.html's content for "/" directly instead of index.html's
+    // client-side meta-refresh stub -- same URL in the address bar, no visible redirect flash.
+    // Extensionless, not "/tournament_app.html": Workers Static Assets 307s ".html" paths
+    // to their extensionless form, which would just trade one visible redirect for another.
+    if (url.pathname === '/') {
+      url.pathname = '/tournament_app';
+      return env.ASSETS.fetch(new Request(url, request));
+    }
     return env.ASSETS.fetch(request);
   },
 };
