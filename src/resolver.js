@@ -250,7 +250,12 @@
   // "clinched" here when no tiebreaker could even arise). Returns ord -> team name for every
   // position that's clinched; a group with ties still pending for some positions just won't
   // have entries for those ords.
-  function clinchedRanks(group) {
+  // Returns name -> {ceiling, floor}, the best/worst final rank within the group that's still
+  // mathematically reachable for every *named* position -- ceiling===floor means that
+  // position is fully clinched (see clinchedRanks below); otherwise it's a real, still-open
+  // range (e.g. a 3-way tie-or-better situation), useful on its own for bounding a team's
+  // placement even when no single rank is locked in yet.
+  function groupRankRanges(group) {
     // Must track every structural POSITION in the group (e.g. "J1", "J2" from the games'
     // {LET}{pos} tokens), not just the ones with a cached team name yet -- a position whose
     // occupant isn't resolved (e.g. "J2(2ndA)" while group A is still undecided) still has a
@@ -282,10 +287,10 @@
     const minWins = (k) => { const n = nameForPos.get(k); return n ? winsByName.get(n) : 0; }; // worst case: lose every remaining game (0 so far if not even named yet)
     const maxWins = (k) => minWins(k) + remaining.get(k); // best case: win them all
 
-    const clinched = new Map();
+    const ranges = new Map();
     keys.forEach((key) => {
       const name = nameForPos.get(key);
-      if (!name) return; // nothing to report a clinched *name* for if no one occupies it yet
+      if (!name) return; // nothing to report a range *for* if no one occupies this position yet
       // Best case for this position: it reaches maxWins while every rival does as badly as
       // possible -- only a rival who's *unavoidably* ahead even then (their floor still
       // beats this position's ceiling) counts. Worst case: this position reaches minWins
@@ -293,6 +298,23 @@
       // tiebreaker assumed in its favor) so the floor stays a safe, conservative bound.
       const ceiling = 1 + keys.filter((k) => k !== key && minWins(k) > maxWins(key)).length;
       const floor = 1 + keys.filter((k) => k !== key && maxWins(k) >= minWins(key)).length;
+      ranges.set(name, { ceiling, floor });
+    });
+    return ranges;
+  }
+
+  // A group position can be mathematically locked in before every game in it is played --
+  // e.g. a team that's already won every game it has left to play can't be caught by a rival
+  // with fewer remaining games, no matter how those remaining games go. Deliberately decided
+  // by win count alone, never our own H2H/goal-diff tiebreakers (see the precedence note
+  // above resolveToken -- those are an assumption that can be wrong for a given tournament's
+  // real rules, but win count alone is never ambiguous, so a position only ever comes back
+  // "clinched" here when no tiebreaker could even arise). Returns ord -> team name for every
+  // position that's clinched; a group with ties still pending for some positions just won't
+  // have entries for those ords.
+  function clinchedRanks(group) {
+    const clinched = new Map();
+    groupRankRanges(group).forEach(({ ceiling, floor }, name) => {
       if (ceiling === floor) clinched.set(ceiling, name);
     });
     return clinched;
@@ -714,6 +736,14 @@
       return max == null || ts > max ? ts : max;
     }, null);
     const upcoming = myGames.filter((e) => !e.final && (latestFinalTS == null || chronoKey(e.raw) > latestFinalTS));
+    function collectLeaves(n, leaves) {
+      if (!n) return;
+      if (n.rrRange) { leaves.push(n.rrRange[0], n.rrRange[1]); return; }
+      if (n.poolBranches) { n.poolBranches.forEach((b) => collectLeaves(b, leaves)); return; }
+      if (n.terminal) { if (n.place) leaves.push(n.place); return; }
+      collectLeaves(n.onWin, leaves); collectLeaves(n.onLose, leaves);
+    }
+
     if (!upcoming.length) {
       // This team has no games left, but if those games were a placement round-robin
       // (e.g. "21-24 RR") and the bracket's OTHER teams haven't all finished yet, this
@@ -727,6 +757,27 @@
         if (!group || !group.complete) {
           const range = rrPlacementRange(rrGame);
           return { tree: { terminal: true, rrRange: range }, floor: range[1], ceiling: range[0] };
+        }
+      }
+      // The team's own group games are all done, but the group itself isn't decided (other
+      // members still have games left) and isn't a placement-RR either -- e.g. a real
+      // round-robin pool where a still-pending game elsewhere could produce a 3-way tie. Not
+      // clinched at a single rank (clinchedRanks would have nothing for it), but the
+      // achievable range is still boundable -- hypothesize every still-reachable ord within
+      // that range and union their downstream paths, instead of reporting nothing at all.
+      const myLet = findTeamGroupLetter(division, teamName);
+      const myGroup = myLet && ctx.standings[myLet];
+      if (myGroup && !myGroup.complete) {
+        const myRange = groupRankRanges(myGroup).get(teamName);
+        if (myRange) {
+          const poolBranches = [];
+          for (let ord = myRange.ceiling; ord <= myRange.floor; ord++) {
+            const feeder = findFeederGameForFinish(ctx, ord, myLet);
+            if (feeder) poolBranches.push(walk(feeder.game, 0, feeder.side));
+          }
+          const leaves = [];
+          collectLeaves({ poolBranches }, leaves);
+          if (leaves.length) return { tree: { terminal: true, poolBranches }, floor: Math.max(...leaves), ceiling: Math.min(...leaves) };
         }
       }
       return null;
@@ -807,13 +858,7 @@
 
     const tree = walk(current, 0);
     const leaves = [];
-    (function collect(n) {
-      if (!n) return;
-      if (n.rrRange) { leaves.push(n.rrRange[0], n.rrRange[1]); return; }
-      if (n.poolBranches) { n.poolBranches.forEach(collect); return; }
-      if (n.terminal) { if (n.place) leaves.push(n.place); return; }
-      collect(n.onWin); collect(n.onLose);
-    })(tree);
+    collectLeaves(tree, leaves);
 
     // When the team's current game is still pool play, there's no W#/L# reference chain to
     // walk yet (pool games are referenced by group *finish*, e.g. "1stA", never by their own
