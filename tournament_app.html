@@ -41,17 +41,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .header-title { font-size: 13px; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
 .header-name { font-size: 22px; font-weight: 700; margin-top: 2px; line-height: 1.2; }
 .header-div { font-size: 12px; opacity: .65; margin-top: 3px; }
-.header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; position: relative; }
 .pick-btn { background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3); color: white; border-radius: 20px; padding: 5px 13px; font-size: 13px; cursor: pointer; white-space: nowrap; margin-top: 4px; }
 .pick-btn:active { background: rgba(255,255,255,.28); }
 .last-updated { font-size: 11px; opacity: .6; margin-top: 8px; }
-/* Sits between the team-name block and the action buttons as a third flex child. flex-grow
-   is deliberately 0 -- a growing 0-basis item collapses to 0 width when the row has no spare
-   space (e.g. a long tournament title), but the img's explicit size doesn't shrink with it,
-   so it overflows and overlaps the buttons instead of disappearing. A fixed reserved slot
-   avoids that: the title/buttons absorb any squeeze via their own shrink/wrap, not this. */
-.header-logo { display: none; flex: 0 0 44px; justify-content: center; align-items: center; }
-.header-logo img { height: 44px; width: 44px; }
+/* Hidden on mobile outright (not just small) -- on a narrow header there's never enough
+   spare room next to a real tournament title + stacked buttons without squeezing them, so
+   it's only shown from the desktop breakpoint up. There, it's taken out of flex flow and
+   absolutely centered on .header-row itself (not flex-distributed space, which skews toward
+   whichever side has less content) so it lands in the true visual middle regardless of how
+   wide the title or button labels happen to be. */
+.header-logo { display: none; }
+@media (min-width: 768px) {
+  .header-logo.show {
+    display: flex; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  }
+  .header-logo img { height: 64px; width: 64px; }
+}
 
 /* TABS */
 .tabs { background: white; display: flex; border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 10; }
@@ -148,7 +154,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 .no-team-prompt { text-align: center; padding: 60px 24px; }
 .no-team-prompt .big { font-size: 56px; margin-bottom: 16px; }
-.no-team-prompt .logo { width: 72px; height: 72px; margin: 0 auto 16px; display: block; }
+.no-team-prompt .logo { width: 160px; height: 160px; margin: 0 auto 16px; display: block; }
 .no-team-prompt h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
 .no-team-prompt p { color: var(--gray); font-size: 15px; margin-bottom: 24px; }
 .cta-btn { background: var(--blue); color: white; border: none; border-radius: 12px; padding: 14px 28px; font-size: 16px; font-weight: 600; cursor: pointer; }
@@ -426,7 +432,7 @@ function renderHeader() {
     document.getElementById('favTeamName').textContent = 'Pick Your Team ⭐';
     document.getElementById('favTeamChips').innerHTML = '';
   }
-  document.getElementById('headerLogo').style.display = favTeam ? 'flex' : 'none';
+  document.getElementById('headerLogo').classList.toggle('show', !!favTeam);
   renderLastUpdated();
 }
 

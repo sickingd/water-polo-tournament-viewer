@@ -22,6 +22,11 @@ class FakeEl {
       add: (c) => self._classes.add(c),
       remove: (c) => self._classes.delete(c),
       contains: (c) => self._classes.has(c),
+      toggle: (c, force) => {
+        const on = force === undefined ? !self._classes.has(c) : !!force;
+        if (on) self._classes.add(c); else self._classes.delete(c);
+        return on;
+      },
     };
   }
 }
