@@ -241,6 +241,63 @@
     return standings;
   }
 
+  // A group position can be mathematically locked in before every game in it is played --
+  // e.g. a team that's already won every game it has left to play can't be caught by a rival
+  // with fewer remaining games, no matter how those remaining games go. Deliberately decided
+  // by win count alone, never our own H2H/goal-diff tiebreakers (see the precedence note
+  // above resolveToken -- those are an assumption that can be wrong for a given tournament's
+  // real rules, but win count alone is never ambiguous, so a position only ever comes back
+  // "clinched" here when no tiebreaker could even arise). Returns ord -> team name for every
+  // position that's clinched; a group with ties still pending for some positions just won't
+  // have entries for those ords.
+  function clinchedRanks(group) {
+    // Must track every structural POSITION in the group (e.g. "J1", "J2" from the games'
+    // {LET}{pos} tokens), not just the ones with a cached team name yet -- a position whose
+    // occupant isn't resolved (e.g. "J2(2ndA)" while group A is still undecided) still has a
+    // real, boundable win range from its own remaining games in *this* group. Comparing only
+    // against already-named rivals would make a sparse group look clinched simply because
+    // there's no one on record left to be caught by -- exactly backwards (a team that hasn't
+    // even played its one game yet would wrongly come back "clinched 1st").
+    const posKeys = new Set();
+    const nameForPos = new Map();
+    group.games.forEach((e) => {
+      [e.white, e.dark].forEach((tok) => {
+        if (tok.type !== 'slot' && tok.type !== 'seed') return;
+        const key = tok.let + ':' + tok.pos;
+        posKeys.add(key);
+        if (tok.team) nameForPos.set(key, tok.team);
+      });
+    });
+    const winsByName = new Map(group.ranked.map((r) => [r.name, r.w]));
+    const remaining = new Map(Array.from(posKeys, (k) => [k, 0]));
+    group.games.forEach((e) => {
+      if (e.final) return;
+      [e.white, e.dark].forEach((tok) => {
+        if (tok.type !== 'slot' && tok.type !== 'seed') return;
+        const key = tok.let + ':' + tok.pos;
+        remaining.set(key, remaining.get(key) + 1);
+      });
+    });
+    const keys = Array.from(posKeys);
+    const minWins = (k) => { const n = nameForPos.get(k); return n ? winsByName.get(n) : 0; }; // worst case: lose every remaining game (0 so far if not even named yet)
+    const maxWins = (k) => minWins(k) + remaining.get(k); // best case: win them all
+
+    const clinched = new Map();
+    keys.forEach((key) => {
+      const name = nameForPos.get(key);
+      if (!name) return; // nothing to report a clinched *name* for if no one occupies it yet
+      // Best case for this position: it reaches maxWins while every rival does as badly as
+      // possible -- only a rival who's *unavoidably* ahead even then (their floor still
+      // beats this position's ceiling) counts. Worst case: this position reaches minWins
+      // while every rival does as well as possible -- a tie there is counted against it (no
+      // tiebreaker assumed in its favor) so the floor stays a safe, conservative bound.
+      const ceiling = 1 + keys.filter((k) => k !== key && minWins(k) > maxWins(key)).length;
+      const floor = 1 + keys.filter((k) => k !== key && maxWins(k) >= minWins(key)).length;
+      if (ceiling === floor) clinched.set(ceiling, name);
+    });
+    return clinched;
+  }
+
   function blankRecord() {
     return { w: 0, l: 0, t: 0, gf: 0, ga: 0, beat: new Set() };
   }
@@ -344,6 +401,14 @@
         }
         if (g && g.complete && g.ranked[tok.ord - 1]) {
           return { team: g.ranked[tok.ord - 1].name, locked: true };
+        }
+        // Group isn't fully played yet, but this specific position might already be
+        // unreachable for anyone else regardless of how the remaining games go (e.g. a team
+        // that's already won out can't be caught) -- see clinchedRanks for how "might" is
+        // decided conservatively, by win count alone.
+        if (g && !g.complete) {
+          const clinched = clinchedRanks(g);
+          if (clinched.has(tok.ord)) return { team: clinched.get(tok.ord), locked: true };
         }
         return { team: null, locked: false, hint: `${ordWord(tok.ord)} of Group ${tok.let}` };
       }
@@ -707,6 +772,29 @@
         node.terminal = true;
         return node;
       }
+      // A genuine multi-team round robin still in progress (e.g. a 4-team consolation pool
+      // like "S bracket") has no single win/lose branch for *this* game -- every game in it
+      // happens regardless, and the eventual exit depends on the whole pool's final
+      // standings, not this one result. Branch over every still-possible finish instead
+      // (mirrors buildAllPossibleGames' root-level hypothesis, just reachable mid-tree here).
+      if (pendingPoolGame(ctx, entry)) {
+        const wlet = (entry.white.type === 'seed' || entry.white.type === 'slot') && entry.white.let;
+        const group = wlet && ctx.standings[wlet];
+        if (group) {
+          // group.size counts *named* entrants -- 0 when, as here, every position is still
+          // a nested unresolved seed (e.g. "S1(3rdA)" with no source group resolved yet
+          // either). groupEntrants derives the real position count from the tokens'
+          // {LET}{pos} grammar directly, independent of whether anyone's named yet.
+          const positionCount = groupEntrants(ctx, wlet).length;
+          node.terminal = true;
+          node.poolBranches = [];
+          for (let ord = 1; ord <= positionCount; ord++) {
+            const feeder = findFeederGameForFinish(ctx, ord, wlet);
+            if (feeder) node.poolBranches.push(walk(feeder.game, depth + 1, feeder.side));
+          }
+          return node;
+        }
+      }
       const winPlace = terminalPlace(entry, 'W');
       const losePlace = terminalPlace(entry, 'L');
       const nextWin = nextGameAfterAny(ctx, entry, 'W');
@@ -722,6 +810,7 @@
     (function collect(n) {
       if (!n) return;
       if (n.rrRange) { leaves.push(n.rrRange[0], n.rrRange[1]); return; }
+      if (n.poolBranches) { n.poolBranches.forEach(collect); return; }
       if (n.terminal) { if (n.place) leaves.push(n.place); return; }
       collect(n.onWin); collect(n.onLose);
     })(tree);
@@ -765,7 +854,28 @@
     // their group (their own games final) but whose mini-bracket game hasn't been played yet
     // gets misclassified as still-pending pool play, and buildAllPossibleGames falls back to
     // hypothesizing every possible group finish instead of the one already locked in.
-    return !!(group && !group.complete && group.games.length > 1);
+    //
+    // 2+ games still isn't sufficient on its own, though: a 4-team single-elimination
+    // mini-bracket (e.g. "X bracket" = X1 vs X4, X2 vs X3) also shows up as one letter with
+    // 2 games, but it's two INDEPENDENT pairs, not a pool -- every position appears in
+    // exactly one game (a perfect matching), so each game's own winner/loser already has an
+    // unambiguous next step via the numeric W#/L# index, same as the single-game case above.
+    // A genuine round robin instead has at least one position playing more than one game
+    // (e.g. a real 4-team pool's S1 plays S2, S3, AND S4) -- that's the actual distinguishing
+    // test, not just the raw game count.
+    return !!(group && !group.complete && group.games.length > 1 && isRealMultiGamePool(group));
+  }
+
+  function isRealMultiGamePool(group) {
+    const gamesByPos = new Map();
+    group.games.forEach((e) => {
+      [e.white, e.dark].forEach((tok) => {
+        if (tok.type !== 'slot' && tok.type !== 'seed') return;
+        const key = tok.let + ':' + tok.pos;
+        gamesByPos.set(key, (gamesByPos.get(key) || 0) + 1);
+      });
+    });
+    return Array.from(gamesByPos.values()).some((c) => c > 1);
   }
 
   // Find the group letter a team was originally seeded into, via its concrete day-1 slot
@@ -903,6 +1013,18 @@
       return max == null || ts > max ? ts : max;
     }, null);
     if (groupTS != null && myGames.some((e) => e.final && chronoKey(e.raw) > groupTS)) return results;
+    // The group as a whole can be undecided while THIS team's specific finish is already
+    // clinched (e.g. they've already won out and can't be caught) -- same situation
+    // resolveToken's 'finish' case now accounts for. Use that single locked finish instead
+    // of hypothesizing every ord, which would otherwise list branches (other group
+    // positions) that are no longer actually reachable.
+    const clinched = clinchedRanks(group);
+    const myClinchedOrd = Array.from(clinched.entries()).find(([, name]) => name === teamName);
+    if (myClinchedOrd) {
+      const feeder = findFeederGameForFinish(ctx, myClinchedOrd[0], let_);
+      if (feeder) enterPosition(feeder.game, feeder.side, [`${ordWord(myClinchedOrd[0])} in Group ${let_}`], 0);
+      return results;
+    }
     for (let ord = 1; ord <= group.size; ord++) {
       const feeder = findFeederGameForFinish(ctx, ord, let_);
       if (!feeder) continue;
