@@ -23,10 +23,10 @@ crons = ["*/3 * * * *"]
 binding = "TOURNAMENT_KV"
 id = "c157fb642daf4a3bafee99582667634c"
 
-# Defensive: the OneDrive fallback path (onedrive.js) does real CPU work -- unzipping and
-# XML-parsing a ~1MB xlsx, measured at ~90-300ms under wrangler dev/workerd -- unlike the
-# Google paths' cheap CSV string-splitting. That's comfortably under this limit, but it costs
-# nothing to set explicitly rather than rely on whatever the account-level default happens to
-# be, given this only runs during an actual live-data outage when it matters most.
-[limits]
-cpu_ms = 30000
+# NOTE: this account is on the Free plan, which rejects an explicit [limits] cpu_ms override
+# outright ("CPU limits are not supported for the Free plan") -- confirmed by a failed deploy
+# attempt, not docs. So the OneDrive fallback path (onedrive.js's unzip + XML parse, measured
+# at ~90-300ms under wrangler dev/workerd) runs under whatever the Free plan's built-in default
+# actually is. Verified directly against the deployed Worker (not just local wrangler dev) that
+# it completes successfully -- see the commit/PR notes for that check -- but if Cloudflare ever
+# tightens the default, this is the first place that would start failing.
