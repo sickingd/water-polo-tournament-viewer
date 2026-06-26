@@ -817,10 +817,13 @@
       const losePlace = terminalPlace(entry, 'L');
       const nextWin = nextGameAfterAny(ctx, entry, 'W');
       const nextLose = nextGameAfterAny(ctx, entry, 'L');
-      if (nextWin) enterPosition(nextWin.game, nextWin.side, path.concat('Win this game'), depth + 1);
-      else if (winPlace) results.push({ path: path.concat('Win this game'), terminal: true, place: winPlace });
-      if (nextLose) enterPosition(nextLose.game, nextLose.side, path.concat('Lose this game'), depth + 1);
-      else if (losePlace) results.push({ path: path.concat('Lose this game'), terminal: true, place: losePlace });
+      // Name the game just won/lost, not a generic "this game" -- once a path is several
+      // branches deep, "Win this game" gives no way to tell which game it meant.
+      const gid = entry.raw.game_id;
+      if (nextWin) enterPosition(nextWin.game, nextWin.side, path.concat(`Win game ${gid}`), depth + 1);
+      else if (winPlace) results.push({ path: path.concat(`Win game ${gid}`), terminal: true, place: winPlace });
+      if (nextLose) enterPosition(nextLose.game, nextLose.side, path.concat(`Lose game ${gid}`), depth + 1);
+      else if (losePlace) results.push({ path: path.concat(`Lose game ${gid}`), terminal: true, place: losePlace });
     }
 
     // Entering at (game, side): if that side is a seeded position with more than one

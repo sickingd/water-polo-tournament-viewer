@@ -181,7 +181,7 @@ assertEqual(relayAll.length, 2, 'Relay test: TEAM A has exactly 2 possible futur
 assertEqual(relayAll[0].path.join(' > '), '1st in Group A', 'Relay test: root path describes the hypothetical pool finish');
 assertEqual(relayAll[0].gameId, 'RELAY-004', 'Relay test: 1stA feeds into the K mini-group game');
 assertEqual(relayAll[0].opponent, 'TEAM Z', 'Relay test: opponent at the entry game is the other (cached) K-group entrant');
-assertEqual(relayAll[1].path.join(' > '), '1st in Group A > Win this game', 'Relay test: deeper node carries the full cumulative path');
+assertEqual(relayAll[1].path.join(' > '), '1st in Group A > Win game RELAY-004', 'Relay test: deeper node carries the full cumulative path');
 assertEqual(relayAll[1].gameId, 'RELAY-005', 'Relay test: winning the K-group game relays forward via "1stK", not a W#/L# ref');
 assertEqual(relayAll[1].opponent, 'TEAM W', 'Relay test: deeper node resolves its own opponent');
 
