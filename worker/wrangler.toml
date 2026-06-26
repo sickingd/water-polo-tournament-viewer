@@ -7,6 +7,7 @@ compatibility_date = "2026-06-21"
 # Cloudflare (nameservers delegated) before `wrangler deploy` will accept this.
 routes = [
   { pattern = "clubwaterpolo.com/api/*", zone_name = "clubwaterpolo.com" },
+  { pattern = "splashbracket.com/api/*", zone_name = "splashbracket.com" },
 ]
 
 # Every 3 minutes -- still comfortably beats the "every 5 minutes, reliably" requirement

@@ -11,6 +11,8 @@ compatibility_date = "2026-06-21"
 routes = [
   { pattern = "clubwaterpolo.com/*", zone_name = "clubwaterpolo.com" },
   { pattern = "www.clubwaterpolo.com/*", zone_name = "clubwaterpolo.com" },
+  { pattern = "splashbracket.com/*", zone_name = "splashbracket.com" },
+  { pattern = "www.splashbracket.com/*", zone_name = "splashbracket.com" },
 ]
 
 [assets]
