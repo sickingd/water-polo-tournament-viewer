@@ -756,8 +756,13 @@ function allFinalPlacements(resolved, totalTeams) {
   resolved.games.forEach((g) => {
     if (g.status !== 'final') return;
     // Prefix match, not anchored at the end -- terminal-game round labels often carry a
-    // trailing matchup suffix (e.g. "3rd 3v4", "7th 7v8").
-    const m = /^(\d+)(st|nd|rd|th)/i.exec((g.round || '').trim());
+    // trailing matchup suffix (e.g. "3rd 3v4", "7th 7v8"), hence requiring whitespace/end
+    // right after the ordinal rather than anchoring the whole pattern. That same requirement
+    // is what excludes a *group-relative* label like "3rd/4thB" (3rd/4th within just group
+    // B's 4 teams, not an absolute tournament placement -- it feeds forward into further
+    // games like "QF playin"), which would otherwise falsely match and lock the winner into
+    // overall 3rd/loser into 4th despite the tournament not being remotely decided for them.
+    const m = /^(\d+)(st|nd|rd|th)(?=\s|$)/i.exec((g.round || '').trim());
     if (!m) return;
     const n = parseInt(m[1], 10);
     const winnerIsWhite = parseFloat(g.white_score) > parseFloat(g.dark_score);

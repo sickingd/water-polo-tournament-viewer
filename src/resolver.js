@@ -693,8 +693,11 @@
   function terminalPlace(entry, wl) {
     // Prefix match, not anchored at the end -- terminal-game round labels often carry a
     // trailing matchup suffix (e.g. "1st 1v2", "7th 7v8") that finalPlacementFor (in the
-    // app, for already-decided games) already ignores the same way.
-    const m = /^(\d+)(st|nd|rd|th)/i.exec((entry.raw.round || '').trim());
+    // app, for already-decided games) already ignores the same way. Requiring whitespace/
+    // end right after the ordinal (rather than anchoring the whole pattern) is also what
+    // excludes a *group-relative* label like "3rd/4thB" (3rd/4th within just one feeder
+    // group, not an absolute tournament placement) from being mistaken for a real decider.
+    const m = /^(\d+)(st|nd|rd|th)(?=\s|$)/i.exec((entry.raw.round || '').trim());
     if (m) {
       const place = parseInt(m[1], 10);
       return wl === 'W' ? place : place + 1;
@@ -707,8 +710,16 @@
   // final rank depends on all those games together). But the bracket's own label already
   // bounds the placement, so use that directly instead of leaving floor/ceiling unknown.
   function rrPlacementRange(entry) {
-    const m = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec((entry.raw.round || '').trim());
-    return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null;
+    const round = (entry.raw.round || '').trim();
+    const rr = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec(round);
+    if (rr) return [parseInt(rr[1], 10), parseInt(rr[2], 10)];
+    // Some divisions label this same kind of bounded-placement game with ordinal suffixes
+    // instead of "RR" (e.g. "7th-9th" for a 3-team decider with no full round robin
+    // scheduled, just 2 of the 3 possible pairs). Requiring the ordinal suffix on both sides
+    // is what keeps this from also matching an unrelated *seeding* label like "1-4 semi
+    // 1v3" (bare numbers, no ordinals -- a real win/lose semifinal, not a placement bound).
+    const ord = /^(\d+)(?:st|nd|rd|th)\s*-\s*(\d+)(?:st|nd|rd|th)/i.exec(round);
+    return ord ? [parseInt(ord[1], 10), parseInt(ord[2], 10)] : null;
   }
 
   // Build the forward decision tree for a team: starting from whichever upcoming game
@@ -739,7 +750,31 @@
     function collectLeaves(n, leaves) {
       if (!n) return;
       if (n.rrRange) { leaves.push(n.rrRange[0], n.rrRange[1]); return; }
-      if (n.poolBranches) { n.poolBranches.forEach((b) => collectLeaves(b, leaves)); return; }
+      if (n.poolBranches) {
+        // An empty array (no positions/feeders found at all) is itself a dead end --
+        // handle it the same way as a branch that recurses to nothing below, not as "no
+        // branches to walk, contribute zero leaves silently."
+        if (!n.poolBranches.length) { if (totalTeams) leaves.push(totalTeams); return; }
+        n.poolBranches.forEach((b) => {
+          const before = leaves.length;
+          collectLeaves(b, leaves);
+          // A pool branch can dead-end with no determinable placement at all -- e.g. a
+          // lower-bracket group whose round label carries no explicit numeric range (unlike
+          // "21-24 RR") and that nothing downstream ever references by finish. Silently
+          // contributing nothing here would understate how bad this path could actually be
+          // (it's *some* reachable placement, just one we can't pin down) -- so it widens
+          // the floor to "could be last" instead, the same safe-fallback spirit as
+          // stillInOriginalStage below, rather than going missing from the range entirely.
+          //
+          // Deliberately scoped to pool branches only, not the plain onWin/onLose case just
+          // below -- there, an unresolved {terminal:true, placeRange:null} leaf needs to
+          // stay contributing nothing, so the *outer* stillInOriginalStage fallback (an
+          // entirely different, smarter answer for "hasn't been played yet at all") still
+          // gets to fire instead of being pre-empted by a blunt totalTeams guess here.
+          if (leaves.length === before && totalTeams) leaves.push(totalTeams);
+        });
+        return;
+      }
       if (n.terminal) { if (n.place) leaves.push(n.place); return; }
       collectLeaves(n.onWin, leaves); collectLeaves(n.onLose, leaves);
     }
