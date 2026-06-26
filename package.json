@@ -9,5 +9,9 @@
   },
   "devDependencies": {
     "wrangler": "^4"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.9.3",
+    "unzipit": "^2.0.3"
   }
 }

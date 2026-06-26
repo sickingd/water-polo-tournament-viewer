@@ -11,7 +11,18 @@
     "year": 2026,
     "sheet_id": "1zawp4l5ElRiVjjkZwT2WFRnTXKLm7wVZA_cO0dxLAX4",
     "master_sheet_name": "MASTER BY DIVISION",
-    "status": "current"
+    "status": "current",
+    "fallback": {
+      "type": "onedrive_xlsx",
+      "share_url": "https://1drv.ms/x/c/6f253ef3afcfe1c8/IQDqjxrceZfsQImF8xXwMqR-AUO_3C0we0lwt5XkwmCxEik?e=j6UDeK",
+      "personal_id": "6f253ef3afcfe1c8",
+      "unique_id": "dc1a8fea-9779-40ec-8985-f315f032a47e",
+      "master_sheet_name": "MASTER BY DIVISION",
+      "stale_after_minutes": 60,
+      "poll_interval_minutes": 15,
+      "active_hours_local": [7, 21],
+      "timezone": "America/Los_Angeles"
+    }
   },
   "2026-girls-us-club-championships": {
     "label": "2026 Girls US Club Championships",

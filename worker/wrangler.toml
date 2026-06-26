@@ -22,3 +22,11 @@ crons = ["*/3 * * * *"]
 [[kv_namespaces]]
 binding = "TOURNAMENT_KV"
 id = "c157fb642daf4a3bafee99582667634c"
+
+# Defensive: the OneDrive fallback path (onedrive.js) does real CPU work -- unzipping and
+# XML-parsing a ~1MB xlsx, measured at ~90-300ms under wrangler dev/workerd -- unlike the
+# Google paths' cheap CSV string-splitting. That's comfortably under this limit, but it costs
+# nothing to set explicitly rather than rely on whatever the account-level default happens to
+# be, given this only runs during an actual live-data outage when it matters most.
+[limits]
+cpu_ms = 30000

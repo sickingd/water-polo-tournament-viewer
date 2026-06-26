@@ -12,6 +12,7 @@
 // slot-token team-name extraction, date parsing) so the two stay interchangeable -- this
 // Worker is just that script's logic running server-side on a much tighter schedule.
 import sources from '../tools/sources.json';
+import { refreshTournamentFromOneDrive } from './onedrive.js';
 
 const MONTHS = {
   Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
@@ -364,6 +365,109 @@ function json(data, status) {
   });
 }
 
+// `_fallback` is internal bookkeeping (see handleScheduledTickWithFallback below) -- it must
+// never leak into the public API response, both to keep the payload small (it duplicates a
+// full games/teams snapshot while a fallback is active) and to keep the response contract
+// identical regardless of which source is currently serving.
+function stripInternal(data) {
+  if (!data || !data._fallback) return data;
+  const { _fallback, ...rest } = data;
+  return rest;
+}
+
+function localHourInTimezone(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }).formatToParts(date);
+  return parseInt(parts.find((p) => p.type === 'hour').value, 10);
+}
+
+function isWithinActiveHours(date, fallbackCfg) {
+  const hour = localHourInTimezone(date, fallbackCfg.timezone);
+  const [start, end] = fallbackCfg.active_hours_local;
+  return hour >= start && hour < end;
+}
+
+// Google Sheets is always primary. A tournament only ever gets here (cfg.fallback present)
+// because its organizers were observed updating a parallel OneDrive workbook instead of the
+// Google Sheet mid-tournament (see onedrive.js's header comment) -- this is the
+// staleness-detection + auto-switchover logic agreed for that situation:
+//   - Google unchanged for fallback.stale_after_minutes AND it's local "game time"
+//     (fallback.active_hours_local) -> switch to OneDrive.
+//   - Once on OneDrive, re-check Google every tick anyway; the moment it changes, switch
+//     straight back -- Google is trusted again automatically, no manual step.
+//   - While on OneDrive, only actually re-poll it on a poll_interval_minutes wall-clock
+//     boundary (it's the fragile, reverse-engineered, anti-bot-sensitive side of this -- see
+//     onedrive.js), not every 3-minute tick like Google.
+// The public KV blob is the plain {tournament, generated, games, teams} shape whenever Google
+// is healthy -- identical to before this feature existed. The extra `_fallback` key (mode,
+// when Google last actually changed, and a snapshot of Google's data to keep diffing against
+// without disturbing what's being served) only appears while a fallback is actually active.
+async function handleScheduledTickWithFallback(tournamentId, cfg, env) {
+  const fb = cfg.fallback;
+  const cachedRaw = await env.TOURNAMENT_KV.get(tournamentId);
+  const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
+  const inFallback = !!(cached && cached._fallback && cached._fallback.mode === 'onedrive');
+
+  const googleData = await refreshTournament(cfg, env);
+
+  if (inFallback) {
+    const googleResumed = !sameData(cached._fallback.googleSnapshot, googleData);
+    if (googleResumed) {
+      await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(googleData));
+      console.log(`[${tournamentId}] Google resumed -- switched back from OneDrive fallback (${googleData.games.length} games)`);
+      return;
+    }
+
+    const staleMinutes = Math.round((Date.now() - new Date(cached._fallback.googleChangedAt).getTime()) / 60000);
+    const isPollBoundary = new Date().getUTCMinutes() % fb.poll_interval_minutes === 0;
+    if (!isPollBoundary) {
+      console.log(`[${tournamentId}] still on OneDrive fallback (Google stale ${staleMinutes}m, not due for a re-poll yet)`);
+      return;
+    }
+    try {
+      const onedriveData = await refreshTournamentFromOneDrive(cfg, fb, extractTeamName, parseScore);
+      if (sameData(cached, onedriveData)) {
+        console.log(`[${tournamentId}] OneDrive fallback checked, no change (Google still stale ${staleMinutes}m, ${onedriveData.games.length} games)`);
+        return;
+      }
+      const combined = Object.assign({}, onedriveData, { _fallback: cached._fallback });
+      await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(combined));
+      console.log(`[${tournamentId}] OneDrive fallback updated (Google still stale ${staleMinutes}m, ${onedriveData.games.length} games)`);
+    } catch (e) {
+      console.error(`[${tournamentId}] OneDrive fallback re-poll failed (staying on last-known fallback data):`, e.message || e);
+    }
+    return;
+  }
+
+  // Normal mode: Google is primary and (as far as we know) healthy.
+  if (!sameData(cached, googleData)) {
+    await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(googleData));
+    console.log(`[${tournamentId}] updated (${googleData.games.length} games)`);
+    return;
+  }
+  console.log(`[${tournamentId}] checked, no change (${googleData.games.length} games)`);
+
+  if (!cached || !cached.generated) return; // no baseline yet to measure staleness against
+  const staleMinutes = (Date.now() - new Date(cached.generated).getTime()) / 60000;
+  if (staleMinutes <= fb.stale_after_minutes) return;
+  if (!isWithinActiveHours(new Date(), fb)) return;
+
+  console.log(`[${tournamentId}] Google stale ${Math.round(staleMinutes)}m during active hours -- attempting OneDrive fallback`);
+  try {
+    const onedriveData = await refreshTournamentFromOneDrive(cfg, fb, extractTeamName, parseScore);
+    const combined = Object.assign({}, onedriveData, {
+      _fallback: {
+        mode: 'onedrive',
+        googleChangedAt: cached.generated,
+        googleSnapshot: { games: cached.games, teams: cached.teams },
+      },
+    });
+    await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(combined));
+    console.log(`[${tournamentId}] switched to OneDrive fallback (${onedriveData.games.length} games)`);
+  } catch (e) {
+    console.error(`[${tournamentId}] OneDrive fallback attempt failed, staying on stale Google data:`, e.message || e);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -378,9 +482,19 @@ export default {
       // cron tick. A completed/frozen tournament must never be re-fetched once archived.
       if (cfg.status === 'completed') return json({ error: 'tournament is archived' }, 409);
       try {
-        const data = await refreshTournament(cfg, env);
-        await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(data));
-        return json(data);
+        if (cfg.fallback) {
+          // Must NOT just force-overwrite with fresh Google data here -- if a OneDrive
+          // fallback is currently active because Google is stale, that would silently
+          // regress live OneDrive scores back to stale Google ones. Route through the same
+          // staleness-aware logic the cron uses so a manual trigger can only ever match or
+          // improve on whatever's currently being served, never go backwards.
+          await handleScheduledTickWithFallback(tournamentId, cfg, env);
+        } else {
+          const data = await refreshTournament(cfg, env);
+          await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(data));
+        }
+        const freshRaw = await env.TOURNAMENT_KV.get(tournamentId);
+        return json(stripInternal(JSON.parse(freshRaw)));
       } catch (e) {
         return json({ error: String(e.message || e) }, 502);
       }
@@ -388,7 +502,7 @@ export default {
 
     const cached = await env.TOURNAMENT_KV.get(tournamentId);
     if (!cached) return json({ error: 'no data yet -- has the cron run at least once?' }, 404);
-    return json(JSON.parse(cached));
+    return json(stripInternal(JSON.parse(cached)));
   },
 
   async scheduled(event, env, ctx) {
@@ -397,6 +511,15 @@ export default {
       // never overwritten. (The registry/automatic-freeze workflow itself is follow-up work;
       // this guard is what makes that safe to flip on later without touching this file.)
       if (cfg.status === 'completed') continue;
+
+      if (cfg.fallback) {
+        ctx.waitUntil(
+          handleScheduledTickWithFallback(tournamentId, cfg, env)
+            .catch((e) => console.error(`[${tournamentId}] fallback-aware refresh failed:`, e.message || e))
+        );
+        continue;
+      }
+
       ctx.waitUntil((async () => {
         try {
           const data = await refreshTournament(cfg, env);
