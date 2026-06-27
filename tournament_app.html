@@ -736,11 +736,21 @@ function renderStandings() {
 }
 
 function groupTableHTML(let_, g, division, ctx) {
+  // A group can be PARTIALLY named -- e.g. a placement bracket like a 5-team "G bracket"
+  // whose entrants are mostly still-unresolved seeds (3rd of Group A, 4th of Group B, ...)
+  // with just one already-known team (CHAWP) mixed in. g.ranked only ever contains the
+  // already-named ones, so checking g.ranked.length alone (any names at all) wrongly takes
+  // the real-standings branch below and silently drops every other entrant from the table.
+  // Compare against the group's full structural position count instead -- only show real
+  // standings once EVERY position has a real name, otherwise fall through to the
+  // placeholder-aware listing (which already mixes in whatever names ARE known).
+  const entrants = ctx ? Resolver.groupEntrants(ctx, let_) : [];
+  const allNamed = entrants.length > 0 && entrants.length === g.ranked.length;
   let html = `<div class="standings-card">
     <div class="standings-header">Group ${escapeHtml(let_)}${g.complete ? '' : ' <span class="group-strength">(in progress)</span>'}</div>
     <table class="standings-table">
       <thead><tr><th style="width:44%">Team</th><th>W</th><th>L</th><th>T</th><th>GD</th></tr></thead><tbody>`;
-  if (g.ranked.length) {
+  if (allNamed) {
     g.ranked.forEach((r, i) => {
       const isFav = favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
       const gd = r.gf - r.ga;
@@ -751,13 +761,14 @@ function groupTableHTML(let_, g, division, ctx) {
         <td style="color:${gd >= 0 ? '#15803d' : '#b91c1c'}">${gdStr}</td>
       </tr>`;
     });
-  } else if (ctx) {
-    // This group's entrants are seed tokens (e.g. "K1(1stC)") with no cached team name yet --
-    // computeGroupStandings can't build real records for them until their source group
-    // finishes and the spreadsheet's own formula catches up. Show the same plain-language
-    // placeholder the spreadsheet's own legend uses ("1st of Group C") instead of an empty
-    // table, exactly like the source sheet's legend columns do.
-    Resolver.groupEntrants(ctx, let_).forEach((r) => {
+  } else if (entrants.length) {
+    // Some or all of this group's entrants are seed tokens (e.g. "K1(1stC)") with no cached
+    // team name yet -- computeGroupStandings can't build real records for them until their
+    // source group finishes and the spreadsheet's own formula catches up. Show the same
+    // plain-language placeholder the spreadsheet's own legend uses ("1st of Group C") for
+    // those, alongside whatever names ARE already known, instead of dropping them from the
+    // table entirely.
+    entrants.forEach((r) => {
       const isFav = r.locked && favDiv === division && r.name.toUpperCase() === (favTeam || '').toUpperCase();
       html += `<tr class="${isFav ? 'my-team' : ''}">
         <td><span class="rank-num">${let_}${r.pos}</span>${escapeHtml(r.name)}${isFav ? ' ⭐' : ''}</td>
