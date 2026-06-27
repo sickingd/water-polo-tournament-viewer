@@ -101,8 +101,11 @@ const myTeamHtml = el('myTeamContent').innerHTML;
 check('My Team header shows team name', el('favTeamName').textContent === 'REGENCY');
 check('My Team shows age chip', el('favTeamChips').innerHTML.includes('age-16U'));
 check('My Team content renders games', myTeamHtml.includes('game-card'));
-check('My Team shows scenario card', myTeamHtml.includes('Path to the Finish'));
-check('My Team scenario shows a best/worst case range', myTeamHtml.includes('Best Case') && myTeamHtml.includes('Worst Case'));
+// REGENCY's run in this frozen fixture is over (all its games are already final by now) --
+// it shows a final-placement banner and a Completed Games list, not a Next Game/Path to the
+// Finish section. See the synthetic TEAMA fixture below for a mid-tournament team instead.
+check('REGENCY (run over in this frozen fixture) shows a final-placement banner', myTeamHtml.includes('final-placement'));
+check('REGENCY shows Completed Games, not a Path to the Finish section', myTeamHtml.includes('Completed Games') && !myTeamHtml.includes('Path to the Finish'));
 
 // --- Bracket tab: viewing bar + group standings + Game#-ordered schedule (no tracker here) ---
 vm.runInContext("showTab('standings')", sandbox);
@@ -165,6 +168,7 @@ const winnerHtml = el('myTeamContent').innerHTML;
 check('Finished team (3rd place) shows final-placement banner', winnerHtml.includes('final-placement'));
 check('3rd place gets the top3 trophy styling', winnerHtml.includes('top3') && winnerHtml.includes('🏆'));
 check('3rd place banner shows "3rd"', winnerHtml.includes('3rd'));
+check('Finished team does NOT also show Best Case/Worst Case stats (the banner already says it)', !winnerHtml.includes('Best Case') && !winnerHtml.includes('Worst Case'));
 
 vm.runInContext("selectTeam('TESTLOSER', 'TEST_DIV')", sandbox);
 const loserHtml = el('myTeamContent').innerHTML;
@@ -179,6 +183,32 @@ vm.runInContext("selectTeam('REGENCY', '16U_GIRLS_D1'); showTab('standings');", 
 const bracketHtmlForGameNum = el('standingsContent').innerHTML;
 check('Bracket tab visibly shows the Game# on each card', /class="game-number">\d+</.test(bracketHtmlForGameNum));
 check('Bracket tab shortens the Game# (no division prefix repeated on the card)', !/class="game-number">16GD1\d+</.test(bracketHtmlForGameNum));
+
+// My Team layout: a team mid-tournament (one completed game, one upcoming win/lose decider)
+// to verify the restructured page -- Best/Worst Case promoted next to the record, the
+// win/lose split shown right under "Next Game" (not in its own separate card), a "Completed
+// Games" section for the played game, and a "Path to the Finish" section (renamed from "All
+// Possible Upcoming Games") for the one still-unplayed game. REGENCY's real fixture can't
+// cover this: by now its actual run in the frozen Superfinals data is already over.
+vm.runInContext(`
+  TD.games.push(
+    { date: '2026-06-20', time: '8:00 AM', location: 'TEST COURT', game_id: 'TESTC01',
+      white: 'A1-TEAMA', white_score: 10, dark: 'A2-TEAMC', dark_score: 5, round: 'A bracket',
+      division: 'TEST_DIV2', played: true },
+    { date: '2026-06-21', time: '2:00 PM', location: 'TEST COURT', game_id: 'TESTC02',
+      white: 'TEAMA', white_score: null, dark: 'TEAMB', dark_score: null, round: '1st',
+      division: 'TEST_DIV2', played: false }
+  );
+  TD.teams.push({ name: 'TEAMA', division: 'TEST_DIV2' }, { name: 'TEAMB', division: 'TEST_DIV2' }, { name: 'TEAMC', division: 'TEST_DIV2' });
+  resolvedCache = {};
+  selectTeam('TEAMA', 'TEST_DIV2');
+`, sandbox);
+const midHtml = el('myTeamContent').innerHTML;
+check('My Team stat row promotes Best Case/Worst Case (Coming is gone)', midHtml.includes('Best Case') && midHtml.includes('Worst Case') && !midHtml.includes('>Coming<'));
+check('My Team shows the win/lose split right after Next Game, not a separate Path-to-Finish card', /Next Game[\s\S]*?If they win[\s\S]*?If they lose/.test(midHtml));
+check('My Team has a Completed Games section', midHtml.includes('Completed Games'));
+check('My Team has a Path to the Finish section (renamed from All Possible Upcoming Games)', midHtml.includes('Path to the Finish') && !midHtml.includes('All Possible Upcoming Games'));
+check('Completed Games section appears before Path to the Finish', midHtml.indexOf('Completed Games') < midHtml.indexOf('Path to the Finish'));
 
 // Placement Tracker rows should be numbered by rank.
 vm.runInContext("showTab('schedule')", sandbox);

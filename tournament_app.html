@@ -175,13 +175,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 /* FUTURE SCENARIOS */
 .scenario-card { background: white; margin: 12px; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-.scenario-header { background: var(--blue); color: white; padding: 10px 14px; font-size: 14px; font-weight: 600; }
 .scenario-body { padding: 10px 14px 14px; }
-.scenario-node { border-left: 3px solid var(--border); padding-left: 12px; margin-top: 10px; }
-.scenario-node.root { border-left: none; padding-left: 0; margin-top: 0; }
-.scenario-game-line { font-size: 14px; font-weight: 600; color: var(--text); }
-.scenario-game-line .vs-opp { color: var(--blue); }
-.scenario-game-line .vs-opp.locked { color: var(--text); }
 .scenario-meta { font-size: 12px; color: var(--text-2); margin-top: 2px; }
 .scenario-branches { display: flex; gap: 10px; margin-top: 8px; }
 .scenario-branch { flex: 1; min-width: 0; }
@@ -192,11 +186,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .scenario-leaf.win { background: var(--green-light); color: var(--green); }
 .scenario-leaf.lose { background: var(--red-light); color: var(--red); }
 .scenario-leaf.continue { background: var(--blue-light); color: var(--blue); }
-.scenario-range-summary { display: flex; gap: 0; border-top: 1px solid var(--border); margin-top: 4px; }
-.scenario-range-summary .rs-item { flex: 1; text-align: center; padding: 10px 0; }
-.scenario-range-summary .rs-item:first-child { border-right: 1px solid var(--border); }
-.scenario-range-summary .rs-num { font-size: 22px; font-weight: 800; color: var(--blue); }
-.scenario-range-summary .rs-label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; }
 
 /* ALL POSSIBLE UPCOMING GAMES */
 .possible-games-section { background: white; margin: 12px; border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
@@ -548,12 +537,23 @@ function renderMyTeam() {
     </div>`;
   }
 
-  // Record summary
+  // Best/worst-case placement, promoted up next to the record (replaces the old "Coming"
+  // count, which was nearly always an undercount -- it only reflected games already on the
+  // confirmed schedule, not everything still reachable). Once a final placement is locked
+  // in, the "Final Result" banner above already says it -- showing Best/Worst Case here too
+  // would just be the same number twice, so skip both stats entirely in that case rather
+  // than show a redundant fixed value.
+  const scenario = finalPlace == null ? Resolver.buildScenarios(resolved.ctx, favTeam, favDivTeamCount) : null;
+
+  // Record + placement-range summary
+  const statDefs = [[wins, 'Wins', '#15803d'], [losses, 'Losses', '#b91c1c']];
+  if (ties) statDefs.push([ties, 'Ties', '#d97706']);
+  if (finalPlace == null) {
+    statDefs.push([scenario && scenario.ceiling != null ? ordWord(scenario.ceiling) : '—', 'Best Case', '#1a56a8']);
+    statDefs.push([scenario && scenario.floor != null ? ordWord(scenario.floor) : '—', 'Worst Case', '#1a56a8']);
+  }
   html += `<div style="background:white;padding:14px 16px;border-bottom:1px solid #e5e7eb;display:flex;gap:0">`;
-  html += `<div style="flex:1;text-align:center;border-right:1px solid #e5e7eb"><div style="font-size:28px;font-weight:800;color:#15803d">${wins}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Wins</div></div>`;
-  html += `<div style="flex:1;text-align:center;border-right:1px solid #e5e7eb"><div style="font-size:28px;font-weight:800;color:#b91c1c">${losses}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Losses</div></div>`;
-  if (ties) html += `<div style="flex:1;text-align:center;border-right:1px solid #e5e7eb"><div style="font-size:28px;font-weight:800;color:#d97706">${ties}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Ties</div></div>`;
-  html += `<div style="flex:1;text-align:center"><div style="font-size:28px;font-weight:800;color:#1a56a8">${trulyUpcoming.length}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Coming</div></div>`;
+  statDefs.forEach(([value, label, color], i) => { html += statBoxHTML(value, label, color, i < statDefs.length - 1); });
   html += `</div>`;
 
   // Next game highlight
@@ -567,28 +567,36 @@ function renderMyTeam() {
     </div>`;
   }
 
-  // Future scenarios
-  html += scenarioCardHTML(resolved, favTeam, favDivTeamCount);
+  // If/then for that next game -- moved up here (right where the game it's about is shown)
+  // instead of being buried in its own "Path to the Finish" card further down, which also
+  // repeated the same opponent/date/round already shown in the highlight just above.
+  html += nextGameInsightHTML(scenario);
 
-  // Games grouped by date
-  const byDate = {};
-  games.forEach(g => {
-    if (!byDate[g.date]) byDate[g.date] = [];
-    byDate[g.date].push(g);
-  });
-
-  for (const [date, dGames] of Object.entries(byDate)) {
-    html += `<div class="date-header">${formatDate(date)}</div>`;
-    dGames.forEach(g => { html += gameCardHTML(g, favTeam); });
+  // Completed games, grouped by date.
+  if (played.length) {
+    const byDate = {};
+    played.forEach(g => { (byDate[g.date] = byDate[g.date] || []).push(g); });
+    html += `<div class="possible-games-section">
+      <div class="possible-games-header">✅ Completed Games</div>`;
+    for (const [date, dGames] of Object.entries(byDate)) {
+      html += `<div class="date-header">${formatDate(date)}</div>`;
+      dGames.forEach(g => { html += gameCardHTML(g, favTeam); });
+    }
+    html += `</div>`;
   }
 
-  // Every game still possible -- not just the next one or two (that's the scenario card
-  // above), but the full forward tree, flattened into a list with the path of outcomes that
-  // would have to happen to reach each one. Shrinks on its own as results come in, since
-  // buildAllPossibleGames re-derives it from the live standings every render.
+  // Every game still possible, played or not -- the confirmed remaining schedule first,
+  // then the full forward tree of hypothetical games beyond it, flattened into a list with
+  // the path of outcomes that would have to happen to reach each one. Shrinks on its own as
+  // results come in, since buildAllPossibleGames re-derives it from the live standings every
+  // render.
   html += possibleGamesSectionHTML(resolved, favTeam);
 
   el.innerHTML = html;
+}
+
+function statBoxHTML(value, label, color, withBorder) {
+  return `<div style="flex:1;text-align:center;${withBorder ? 'border-right:1px solid #e5e7eb' : ''}"><div style="font-size:28px;font-weight:800;color:${color}">${value}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">${label}</div></div>`;
 }
 
 // A path segment like "Win game 14BD310" embeds the full game id (built in src/resolver.js,
@@ -623,16 +631,31 @@ function possibleGameNodeHTML(node) {
 }
 
 function possibleGamesSectionHTML(resolved, team) {
-  const all = Resolver.buildAllPossibleGames(resolved.ctx, team);
-  // An empty path means this IS the team's next confirmed game (buildAllPossibleGames
-  // always pushes it first, with no hypothetical steps before it) -- it's already shown
-  // above in the "Next Game" highlight and the "Path to the Finish" card, so repeating it
-  // here again is just clutter, not new information. Every genuinely hypothetical entry has
-  // at least one path step ("Win game 123", "2nd in Group A", ...) before it.
-  const nodes = all.filter((n) => !n.terminal && n.path.length > 0);
+  const all = Resolver.buildAllPossibleGames(resolved.ctx, team).filter((n) => !n.terminal);
+  // buildAllPossibleGames only starts walking from the team's first non-pool game -- while
+  // still mid-pool, a team can have several of its OWN remaining round-robin games already
+  // on the confirmed schedule that it never lists at all (there's no W#/L# branch for them
+  // individually; the whole group's eventual finish is hypothesized instead). Merge those
+  // in too, chronologically first, so this list never silently omits a team's own next games.
+  const seen = new Set(all.map((n) => n.gameId));
+  const confirmedExtra = resolved.games.filter((g) => {
+    if (g.played || seen.has(g.game_id)) return false;
+    return g.whiteTeam === team || g.darkTeam === team ||
+      (g.white || '').toUpperCase() === team.toUpperCase() ||
+      (g.dark || '').toUpperCase() === team.toUpperCase();
+  }).sort((a, b) => gameTS(a).localeCompare(gameTS(b))).map((g) => {
+    const iAmWhite = (g.whiteTeam || g.white).toUpperCase() === team.toUpperCase();
+    return {
+      path: [], gameId: g.game_id, date: g.date, time: g.time, location: g.location,
+      opponent: iAmWhite ? g.darkLabel : g.whiteLabel,
+      opponentLocked: iAmWhite ? g.darkLocked : g.whiteLocked,
+      round: g.round,
+    };
+  });
+  const nodes = confirmedExtra.concat(all);
   if (!nodes.length) return '';
   let html = `<div class="possible-games-section">
-    <div class="possible-games-header">🧭 All Possible Upcoming Games</div>
+    <div class="possible-games-header">🧭 Path to the Finish</div>
     <div class="possible-games-sub">Every game ${escapeHtml(team)} could still play in, and what
       has to happen to get there. This list narrows on its own as results come in.</div>`;
   nodes.forEach((n) => { html += possibleGameNodeHTML(n); });
@@ -649,38 +672,24 @@ function ordWord(n) {
   return n + suffix;
 }
 
-function scenarioCardHTML(resolved, team, totalTeams) {
-  const scenario = Resolver.buildScenarios(resolved.ctx, team, totalTeams);
-  if (!scenario) return '';
-  let html = `<div class="scenario-card">
-    <div class="scenario-header">🔮 Path to the Finish</div>
-    <div class="scenario-body">`;
-  if (scenario.floor != null && scenario.ceiling != null) {
-    html += `<div class="scenario-range-summary">
-      <div class="rs-item"><div class="rs-num">${ordWord(scenario.ceiling)}</div><div class="rs-label">Best Case</div></div>
-      <div class="rs-item"><div class="rs-num">${ordWord(scenario.floor)}</div><div class="rs-label">Worst Case</div></div>
-    </div>`;
-  }
-  html += scenarioNodeHTML(scenario.tree);
-  html += `</div></div>`;
-  return html;
-}
-
-function scenarioNodeHTML(node) {
+// What happens next for the team's current/upcoming game -- shown right under the "Next
+// Game" highlight instead of in its own separate card, since repeating that same opponent/
+// date/round a second time added nothing. Only the outcome-dependent part (the win/lose
+// split, or the round-robin-among-N-teams note) is new information here.
+function nextGameInsightHTML(scenario) {
+  const node = scenario && scenario.tree;
   if (!node || !node.gameId) return '';
-  let html = `<div class="scenario-node root">
-    <div class="scenario-game-line">vs <span class="vs-opp ${node.opponentLocked ? 'locked' : ''}">${escapeHtml(node.opponent)}</span></div>
-    <div class="scenario-meta">${formatDate(node.date)} &bull; ${node.time} &bull; ${escapeHtml(node.round || '')}</div>`;
+  let inner = '';
   if (node.rrRange) {
-    html += `<div class="scenario-meta">This is a round-robin among ${node.rrRange[1] - node.rrRange[0] + 1} teams for places ${ordWord(node.rrRange[0])}–${ordWord(node.rrRange[1])} — final spot depends on every result in the group, not just this game.</div>`;
+    inner = `<div class="scenario-meta">This is a round-robin among ${node.rrRange[1] - node.rrRange[0] + 1} teams for places ${ordWord(node.rrRange[0])}–${ordWord(node.rrRange[1])} — final spot depends on every result in the group, not just this game.</div>`;
   } else if (!node.final && (node.onWin || node.onLose)) {
-    html += `<div class="scenario-branches">
+    inner = `<div class="scenario-branches">
       <div class="scenario-branch"><div class="scenario-branch-label win">If they win</div>${scenarioBranchHTML(node.onWin)}</div>
       <div class="scenario-branch"><div class="scenario-branch-label lose">If they lose</div>${scenarioBranchHTML(node.onLose)}</div>
     </div>`;
   }
-  html += `</div>`;
-  return html;
+  if (!inner) return '';
+  return `<div class="scenario-card"><div class="scenario-body">${inner}</div></div>`;
 }
 
 function scenarioBranchHTML(node) {
