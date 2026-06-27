@@ -186,6 +186,56 @@
 
   // --- Division model ---------------------------------------------------
 
+  // Does any OTHER game have a slot/seed token at this exact {letter, position} naming a
+  // DIFFERENT team? A real, already-established position (e.g. group G's actual "G2") would
+  // conflict with a typo'd token wrongly claiming that same spot for someone else.
+  function letterPositionConflict(entries, self, let_, pos, team) {
+    return entries.some((e) => e !== self && [e.white, e.dark].some((tok) => (
+      (tok.type === 'slot' || tok.type === 'seed') && tok.let === let_ && tok.pos === pos &&
+      tok.team && team && tok.team !== team
+    )));
+  }
+
+  // Does this letter show up as a slot/seed identity in any OTHER game at all (regardless of
+  // position)? Used to prefer an already-established group letter over a one-off orphan when
+  // neither side's position outright conflicts (see repairMismatchedSeedLetters below).
+  function letterUsedElsewhere(entries, self, let_) {
+    return entries.some((e) => e !== self && [e.white, e.dark].some((tok) => (
+      (tok.type === 'slot' || tok.type === 'seed') && tok.let === let_
+    )));
+  }
+
+  // The live sheet has shown a one-sided letter typo on an otherwise-correct seed pair: e.g.
+  // "G2(2ndH)-MISSION" should read "O2(2ndH)-MISSION" to match its sibling "O1(1stG)-SBWPC B"
+  // (a single decisive game between two crossover seeds, just like the M/N/P groups that
+  // already work); "VS4(3rdH)-SOCAL GOLD" should read "S4..." to complete the existing 4-team
+  // "S bracket" round robin's missing 6th pairing. Seen live only on games with no round
+  // label at all -- a properly "bracket"/"RR"-tagged game's letter has never been observed to
+  // be wrong, so this deliberately only touches the blank-round shape, and only repairs the
+  // side with a clear signal (a position collision, or being a total orphan elsewhere) rather
+  // than guessing when both sides look equally plausible.
+  function repairMismatchedSeedLetters(entries) {
+    entries.forEach((entry) => {
+      if ((entry.raw.round || '').trim() !== '') return;
+      const w = entry.white, d = entry.dark;
+      if ((w.type !== 'slot' && w.type !== 'seed') || (d.type !== 'slot' && d.type !== 'seed')) return;
+      if (!w.let || !d.let || w.let === d.let) return;
+      const wConflict = letterPositionConflict(entries, entry, w.let, w.pos, w.team);
+      const dConflict = letterPositionConflict(entries, entry, d.let, d.pos, d.team);
+      if (dConflict && !wConflict) { d.let = w.let; return; }
+      if (wConflict && !dConflict) { w.let = d.let; return; }
+      if (wConflict && dConflict) return; // no clean signal either way -- don't guess
+      const wEstablished = letterUsedElsewhere(entries, entry, w.let);
+      const dEstablished = letterUsedElsewhere(entries, entry, d.let);
+      // Prefer whichever side is the already-established letter (used elsewhere too, e.g.
+      // group S's 5 other "S bracket" games) over a one-off orphan (e.g. "VS", used nowhere
+      // else) -- the orphan is the typo, fix it to match the established side. Ties (both or
+      // neither established) default to trusting white.
+      if (dEstablished && !wEstablished) w.let = d.let;
+      else d.let = w.let;
+    });
+  }
+
   function buildDivision(games) {
     const byId = new Map();
     const byLocal = new Map();
@@ -199,6 +249,7 @@
       if (ln != null) byLocal.set(ln, entry);
       return entry;
     });
+    repairMismatchedSeedLetters(parsedGames);
 
     // Reverse index: canonical key -> games that reference it, so we can answer
     // "what game does the winner/loser of THIS game feed into?"
@@ -261,14 +312,7 @@
       return null;
     }
 
-    division.games.forEach((entry) => {
-      const round = (entry.raw.round || '');
-      const isRR = /bracket|RR/i.test(round);
-      if (!isRR) return;
-      const wl = letOf(entry.white, round);
-      const dl = letOf(entry.dark, round);
-      if (!wl || !dl || wl !== dl) return;
-      const let_ = wl;
+    function addToGroup(let_, entry) {
       if (!groups.has(let_)) groups.set(let_, { records: new Map(), games: [] });
       const g = groups.get(let_);
       g.games.push(entry);
@@ -291,6 +335,45 @@
       if (ws > ds) { wr.w++; dr.l++; wr.beat.add(darkName); }
       else if (ds > ws) { dr.w++; wr.l++; dr.beat.add(whiteName); }
       else { wr.t++; dr.t++; }
+    }
+
+    division.games.forEach((entry) => {
+      const round = (entry.raw.round || '');
+      // A blank round (no COMMENTS at all) is a data-entry gap, not a deliberate signal that
+      // this game isn't part of a group -- repairMismatchedSeedLetters above already fixes
+      // up the one known failure mode there (a typo'd letter on one side), so once both
+      // sides agree, a same-letter pair deserves the same standings tracking a properly
+      // "bracket"/"RR"-labeled game gets.
+      const isRR = /bracket|RR/i.test(round) || round.trim() === '';
+      if (!isRR) return;
+      const wl = letOf(entry.white, round);
+      const dl = letOf(entry.dark, round);
+      if (!wl || !dl || wl !== dl) return;
+      addToGroup(wl, entry);
+    });
+
+    // Some divisions label a genuine multi-game round-robin placement pool with just an
+    // ordinal range ("25th-30th N1,N3") instead of the literal word "bracket"/"RR" -- but
+    // that exact same range-prefix shape is ALSO used for a real single-elimination
+    // semifinal pair ("9th-12th semi 9v12", two independent games, never a pool), so unlike
+    // the main pass above this can't be trusted by label text alone. Tentatively group
+    // these separately, then keep only the ones that turn out to be a genuine pool (some
+    // position plays more than once) -- a single-elim pair never does, since every position
+    // there plays exactly once.
+    const tentative = new Map();
+    division.games.forEach((entry) => {
+      const round = (entry.raw.round || '').trim();
+      if (/bracket|RR/i.test(round) || round === '') return; // already handled above
+      if (!/^\d+(?:st|nd|rd|th)\s*-\s*\d+(?:st|nd|rd|th)/i.test(round)) return;
+      const wl = letOf(entry.white, round);
+      const dl = letOf(entry.dark, round);
+      if (!wl || !dl || wl !== dl || groups.has(wl)) return;
+      if (!tentative.has(wl)) tentative.set(wl, []);
+      tentative.get(wl).push(entry);
+    });
+    tentative.forEach((entries, let_) => {
+      if (!isRealMultiGamePool({ games: entries })) return;
+      entries.forEach((entry) => addToGroup(let_, entry));
     });
 
     const standings = {};

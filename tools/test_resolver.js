@@ -185,5 +185,53 @@ assertEqual(relayAll[1].path.join(' > '), '1st in Group A > Win game RELAY-004',
 assertEqual(relayAll[1].gameId, 'RELAY-005', 'Relay test: winning the K-group game relays forward via "1stK", not a W#/L# ref');
 assertEqual(relayAll[1].opponent, 'TEAM W', 'Relay test: deeper node resolves its own opponent');
 
+// Regression test: a one-sided letter typo on an otherwise-correct seed pair, seen live in
+// the US Club Championships sheet -- "O1(1stG)-..." paired with a blank-round dark side that
+// should read "O2(2ndH)-..." but instead says "G2(2ndH)-..." (a real, unrelated letter
+// already used by the Group G pool's own G2). Must NOT merge into G (G2 is already a
+// different team there); must create a brand-new Group O with both entrants instead.
+const letterTypoOGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99G01', white: 'G1-TEAM G1', white_score: 10, dark: 'G2-TEAM G2', dark_score: 3, round: 'G bracket', division: '18U_GIRLS', played: true },
+  { date: '2026-06-19', time: '9:00 AM', location: 'X', game_id: '99G02', white: 'G3-TEAM G3', white_score: 8, dark: 'G4-TEAM G4', dark_score: 6, round: 'G bracket', division: '18U_GIRLS', played: true },
+  { date: '2026-06-19', time: '10:00 AM', location: 'X', game_id: '99G03', white: 'H1-TEAM H1', white_score: 9, dark: 'H2-TEAM H2', dark_score: 4, round: 'H bracket', division: '18U_GIRLS', played: true },
+  { date: '2026-06-20', time: '1:00 PM', location: 'X', game_id: '99G04', white: 'O1(1stG)-TEAM G1', white_score: null, dark: 'G2(2ndH)-TEAM H2', dark_score: null, round: '', division: '18U_GIRLS', played: false },
+];
+const letterTypoOResult = global.Resolver.resolveDivision(letterTypoOGames);
+assertEqual(!!letterTypoOResult.standings['O'], true, 'Letter-typo test: a brand-new Group O is created (not silently dropped)');
+assertEqual(letterTypoOResult.standings['O'] && letterTypoOResult.standings['O'].games.length, 1, 'Letter-typo test: Group O has its one decisive game');
+const groupOEntrants = global.Resolver.groupEntrants(letterTypoOResult.ctx, 'O');
+assertEqual(groupOEntrants.length, 2, 'Letter-typo test: Group O lists both entrants');
+assertEqual(groupOEntrants[1] && groupOEntrants[1].name, 'TEAM H2', 'Letter-typo test: O2 resolves to the real team, not stuck on the typo');
+assertEqual(letterTypoOResult.standings['G'].ranked.find((r) => r.name === 'TEAM H2'), undefined, 'Letter-typo test: the typo did not leak TEAM H2 into the unrelated Group G');
+
+// Regression test: the SAME shape, but this time the typo'd letter ("VS4") is the orphan
+// (used nowhere else) and the OTHER side's letter ("S") is the real, already-established
+// group -- must merge into the existing group, not create a bogus new "VS" group.
+const letterTypoSGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99S01', white: 'S1-TEAM S1', white_score: 10, dark: 'S4-TEAM S4', dark_score: 3, round: 'S bracket', division: '18U_GIRLS', played: true },
+  { date: '2026-06-19', time: '9:00 AM', location: 'X', game_id: '99S02', white: 'S2-TEAM S2', white_score: 8, dark: 'S3-TEAM S3', dark_score: 6, round: 'S bracket', division: '18U_GIRLS', played: true },
+  { date: '2026-06-20', time: '1:00 PM', location: 'X', game_id: '99S03', white: 'S2-TEAM S2', white_score: null, dark: 'VS4-TEAM S4', dark_score: null, round: '', division: '18U_GIRLS', played: false },
+];
+const letterTypoSResult = global.Resolver.resolveDivision(letterTypoSGames);
+assertEqual(!!letterTypoSResult.standings['VS'], false, 'Letter-typo test: no bogus "VS" group created');
+assertEqual(letterTypoSResult.standings['S'].games.length, 3, 'Letter-typo test: the typo\'d game merges into the existing Group S instead');
+
+// Regression test: a genuine multi-game round-robin placement pool labeled with an ordinal
+// range instead of "bracket"/"RR" ("25th-30th N1,N3", seen live in the boys Futures
+// Superfinals sheet) must still be tracked -- but a real single-elimination semifinal pair
+// sharing the exact same label SHAPE ("9th-12th semi 9v12", every position playing only
+// once) must NOT be, since there's no real "standings" to show for that.
+const ordinalRangeGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99N01', white: 'N1-TEAM N1', white_score: 10, dark: 'N3-TEAM N3', dark_score: 3, round: '25th-30th N1,N3', division: '16U_BOYS_D3', played: true },
+  { date: '2026-06-19', time: '9:00 AM', location: 'X', game_id: '99N02', white: 'N2-TEAM N2', white_score: 8, dark: 'N3-TEAM N3', dark_score: 6, round: '25th-30th N2,N3', division: '16U_BOYS_D3', played: true },
+  { date: '2026-06-19', time: '10:00 AM', location: 'X', game_id: '99N03', white: 'N1-TEAM N1', white_score: 9, dark: 'N2-TEAM N2', dark_score: 7, round: '25th-30th N1,N2', division: '16U_BOYS_D3', played: true },
+  { date: '2026-06-19', time: '11:00 AM', location: 'X', game_id: '99J01', white: 'J1-TEAM J1', white_score: 12, dark: 'J4-TEAM J4', dark_score: 5, round: '9th-12th semi 9v12', division: '16U_BOYS_D3', played: true },
+  { date: '2026-06-19', time: '12:00 PM', location: 'X', game_id: '99J02', white: 'J2-TEAM J2', white_score: 11, dark: 'J3-TEAM J3', dark_score: 4, round: '9th-12th semi 10v11', division: '16U_BOYS_D3', played: true },
+];
+const ordinalRangeResult = global.Resolver.resolveDivision(ordinalRangeGames);
+assertEqual(!!ordinalRangeResult.standings['N'], true, 'Ordinal-range test: a real 3-team round robin labeled "25th-30th" is tracked');
+assertEqual(ordinalRangeResult.standings['N'] && ordinalRangeResult.standings['N'].games.length, 3, 'Ordinal-range test: all 3 of Group N\'s round-robin games are counted');
+assertEqual(!!ordinalRangeResult.standings['J'], false, 'Ordinal-range test: a single-elimination pair sharing the same label shape is NOT tracked as a pool');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
