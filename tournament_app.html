@@ -591,8 +591,16 @@ function renderMyTeam() {
   el.innerHTML = html;
 }
 
+// A path segment like "Win game 14BD310" embeds the full game id (built in src/resolver.js,
+// which stays UI-agnostic and doesn't know about display shortening) -- strip it down the
+// same way shortGameId does everywhere else a game id is shown, so a multi-step path reads
+// as short numbers instead of repeated long ids.
+function shortenPathSegment(seg) {
+  return seg.replace(/game (\S+)$/, (_, id) => 'game ' + shortGameId(id));
+}
+
 function possibleGameNodeHTML(node) {
-  const pathLabel = node.path.length ? node.path.join(' → ') : 'Current group';
+  const pathLabel = node.path.length ? node.path.map(shortenPathSegment).join(' → ') : 'Current group';
   if (node.terminal) {
     return `<div class="possible-path">${escapeHtml(pathLabel)}</div>
       <div class="possible-terminal">Finishes ${ordWord(node.place)}</div>`;
@@ -600,7 +608,7 @@ function possibleGameNodeHTML(node) {
   return `<div class="possible-path">${escapeHtml(pathLabel)}</div>
     <div class="game-card">
       <div class="game-time-col">
-        <div class="game-number">${escapeHtml(node.gameId)}</div>
+        <div class="game-number">${escapeHtml(shortGameId(node.gameId))}</div>
         <div class="game-date">${formatDate(node.date)}</div>
         <div class="game-time">${(node.time || '').replace(' AM', 'a').replace(' PM', 'p')}</div>
         <div class="game-loc"><span class="game-loc-abbr">${abbrevLocation(node.location)}</span></div>
@@ -616,7 +624,12 @@ function possibleGameNodeHTML(node) {
 
 function possibleGamesSectionHTML(resolved, team) {
   const all = Resolver.buildAllPossibleGames(resolved.ctx, team);
-  const nodes = all.filter((n) => !n.terminal);
+  // An empty path means this IS the team's next confirmed game (buildAllPossibleGames
+  // always pushes it first, with no hypothetical steps before it) -- it's already shown
+  // above in the "Next Game" highlight and the "Path to the Finish" card, so repeating it
+  // here again is just clutter, not new information. Every genuinely hypothetical entry has
+  // at least one path step ("Win game 123", "2nd in Group A", ...) before it.
+  const nodes = all.filter((n) => !n.terminal && n.path.length > 0);
   if (!nodes.length) return '';
   let html = `<div class="possible-games-section">
     <div class="possible-games-header">🧭 All Possible Upcoming Games</div>
@@ -1016,7 +1029,7 @@ function gameCardHTML(g, myTeam) {
 
   return `<div class="game-card ${isFavGame ? 'fav-game' : ''}" data-game-id="${escapeAttr(g.game_id)}">
     <div class="game-time-col">
-      <div class="game-number">${escapeHtml(g.game_id)}</div>
+      <div class="game-number">${escapeHtml(shortGameId(g.game_id))}</div>
       <div class="game-time">${g.time.replace(' AM', 'a').replace(' PM', 'p')}</div>
       <div class="game-loc"><span class="game-loc-abbr">${loc}</span></div>
     </div>
@@ -1224,6 +1237,22 @@ function selectBracket(div) {
 }
 
 // --- Helpers ---
+// Game ids carry a division prefix a coach already knows from context (e.g. "18U_GIRLS-127",
+// "14BD310") -- showing the full id everywhere just adds visual noise and makes a path of
+// several ids harder to scan. Strips it down to whatever's left after the LAST run of digits
+// preceded by non-digits at the start, e.g. "18U_GIRLS-127" -> "127", "14BD310" -> "10" (the
+// "3" there is the division number, part of the prefix, not the per-game number). Mirrors
+// localNumber()'s own two id shapes in src/resolver.js, but keeps the result as the original
+// digit string (not reparsed as an int) so a leading zero like "14U_GIRLS-011" stays "011"
+// instead of becoming "11".
+function shortGameId(id) {
+  if (!id) return '';
+  const m = /^\d+[A-Za-z]D\d(\d+)$/.exec(id);
+  if (m) return m[1];
+  const generic = /(\d+)$/.exec(id);
+  return generic ? generic[1] : id;
+}
+
 function formatDate(d) {
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

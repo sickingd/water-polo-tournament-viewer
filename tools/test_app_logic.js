@@ -171,10 +171,14 @@ const loserHtml = el('myTeamContent').innerHTML;
 check('4th place shows final-placement banner without trophy styling', loserHtml.includes('final-placement') && !loserHtml.includes('top3') && !loserHtml.includes('🏆'));
 check('4th place banner shows "4th"', loserHtml.includes('4th'));
 
-// Game# should be visibly shown on each game card (not just available as a data attribute).
+// Game# should be visibly shown on each game card (not just available as a data attribute) --
+// shortened to just the trailing number (the "16GD1" division prefix is noise a coach doesn't
+// need repeated on every card; data-game-id keeps the full id for the chronological-order check
+// above).
 vm.runInContext("selectTeam('REGENCY', '16U_GIRLS_D1'); showTab('standings');", sandbox);
 const bracketHtmlForGameNum = el('standingsContent').innerHTML;
-check('Bracket tab visibly shows the Game# on each card', /class="game-number">16GD1\d+</.test(bracketHtmlForGameNum));
+check('Bracket tab visibly shows the Game# on each card', /class="game-number">\d+</.test(bracketHtmlForGameNum));
+check('Bracket tab shortens the Game# (no division prefix repeated on the card)', !/class="game-number">16GD1\d+</.test(bracketHtmlForGameNum));
 
 // Placement Tracker rows should be numbered by rank.
 vm.runInContext("showTab('schedule')", sandbox);
