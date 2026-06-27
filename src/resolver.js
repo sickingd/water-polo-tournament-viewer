@@ -186,6 +186,42 @@
 
   // --- Division model ---------------------------------------------------
 
+  // A downstream seed/finish token's cached "-{TEAM}" suffix is a recomputed formula value,
+  // not a fixed assignment -- unlike a 'slot' token's cached name (always reliable, a fixed
+  // day-1 assignment), it can carry a stale typo (a dropped/swapped letter, e.g. "SBWPC" for
+  // the real "SBPWC", "CHAWP" for "CHAWP WHITE"). The dangerous case: that SAME typo can show
+  // up on BOTH a feeder game's cached name AND a downstream seed's own cached name, since
+  // both were written by the same broken formula -- the two then "agree" with each other on
+  // the wrong name, which defeats resolveToken's own per-token cross-checks (nothing to
+  // reconcile when both sides already match). Canonicalizing every cached name division-wide
+  // against the set that DOES come from a 'slot' token, before anything else runs, means
+  // every downstream consumer -- computeGroupStandings, groupEntrants, resolveToken -- sees
+  // the real name from the start instead of needing its own repair logic.
+  function repairTypoedTeamNames(entries) {
+    const canonical = new Set();
+    entries.forEach((e) => {
+      [e.white, e.dark].forEach((tok) => { if (tok.type === 'slot' && tok.team) canonical.add(tok.team); });
+    });
+    if (!canonical.size) return;
+    const canonicalList = Array.from(canonical);
+    function repair(name) {
+      if (canonical.has(name)) return name;
+      // Prefix direction matters: the cached value is the (possibly truncated) one, so only
+      // a canonical name that's an extension of it counts (mirrors the existing 'finish'-case
+      // repair's own rationale for this exact "dropped squad letter" shape).
+      const prefixMatches = canonicalList.filter((c) => c.startsWith(name));
+      if (prefixMatches.length === 1) return prefixMatches[0];
+      const closeMatches = canonicalList.filter((c) => levenshtein(c, name) <= 2);
+      if (closeMatches.length === 1) return closeMatches[0];
+      return name;
+    }
+    entries.forEach((e) => {
+      [e.white, e.dark].forEach((tok) => {
+        if (tok.type !== 'slot' && tok.type !== 'team' && tok.team) tok.team = repair(tok.team);
+      });
+    });
+  }
+
   // Does any OTHER game have a slot/seed token at this exact {letter, position} naming a
   // DIFFERENT team? A real, already-established position (e.g. group G's actual "G2") would
   // conflict with a typo'd token wrongly claiming that same spot for someone else.
@@ -249,6 +285,7 @@
       if (ln != null) byLocal.set(ln, entry);
       return entry;
     });
+    repairTypoedTeamNames(parsedGames);
     repairMismatchedSeedLetters(parsedGames);
 
     // Reverse index: canonical key -> games that reference it, so we can answer
@@ -1075,7 +1112,7 @@
       // clinched at a single rank (clinchedRanks would have nothing for it), but the
       // achievable range is still boundable -- hypothesize every still-reachable ord within
       // that range and union their downstream paths, instead of reporting nothing at all.
-      const myLet = findTeamGroupLetter(division, teamName);
+      const myLet = findTeamGroupLetter(ctx, myGames, teamName);
       const myGroup = myLet && ctx.standings[myLet];
       if (myGroup && !myGroup.complete) {
         const myRange = groupRankRanges(myGroup).get(teamName);
@@ -1257,11 +1294,28 @@
     return Array.from(gamesByPos.values()).some((c) => c > 1);
   }
 
-  // Find the group letter a team was originally seeded into, via its concrete day-1 slot
-  // token (e.g. "A1-NEWPORT" -> "A") -- the one token type that's always a fixed assignment,
-  // never a computed/wrapped reference.
-  function findTeamGroupLetter(division, teamName) {
-    for (const entry of division.games) {
+  // Which group's still-open standings (if any) govern this team's remaining placement?
+  // Prefer the group of their most recently FINALIZED game, not just their original day-1
+  // pool -- a team can already be done with that pool (it's long complete) and have moved on
+  // into a later placement bracket via a seed token (e.g. "T1(3rdB)-ROSE BOWL", a 3rd-place
+  // crossover pool entered only after the original pool finished), where their OWN games are
+  // done but the bracket itself still has another team's result pending. Only fall back to
+  // the original slot-based pool (the one token type that's always a fixed day-1 assignment,
+  // never a computed/wrapped reference) when there's no finalized game to go by yet at all --
+  // a day-zero team still waiting on its very first pool result.
+  function findTeamGroupLetter(ctx, myGames, teamName) {
+    let latest = null, latestTS = null;
+    myGames.forEach((e) => {
+      if (!e.final) return;
+      const w = resolveToken(e.white, ctx, 0);
+      const d = resolveToken(e.dark, ctx, 0);
+      const mine = w.team === teamName ? e.white : (d.team === teamName ? e.dark : null);
+      if (!mine || (mine.type !== 'slot' && mine.type !== 'seed')) return;
+      const ts = chronoKey(e.raw);
+      if (latestTS == null || ts > latestTS) { latestTS = ts; latest = mine.let; }
+    });
+    if (latest) return latest;
+    for (const entry of ctx.division.games) {
       if (entry.white.type === 'slot' && entry.white.team === teamName) return entry.white.let;
       if (entry.dark.type === 'slot' && entry.dark.team === teamName) return entry.dark.let;
     }
@@ -1376,7 +1430,7 @@
       return results;
     }
 
-    const let_ = findTeamGroupLetter(division, teamName);
+    const let_ = findTeamGroupLetter(ctx, myGames, teamName);
     const group = let_ && ctx.standings[let_];
     // Only hypothesize finishes while the group is genuinely undecided. If it's already
     // complete and there's still no realCurrent, the team's actual bracket run (locked in

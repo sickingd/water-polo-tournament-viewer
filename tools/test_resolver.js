@@ -233,5 +233,40 @@ assertEqual(!!ordinalRangeResult.standings['N'], true, 'Ordinal-range test: a re
 assertEqual(ordinalRangeResult.standings['N'] && ordinalRangeResult.standings['N'].games.length, 3, 'Ordinal-range test: all 3 of Group N\'s round-robin games are counted');
 assertEqual(!!ordinalRangeResult.standings['J'], false, 'Ordinal-range test: a single-elimination pair sharing the same label shape is NOT tracked as a pool');
 
+// Regression test: a typo'd cached name on a downstream seed can match the SAME typo on its
+// own feeder game (both written by the same broken formula), which defeats a per-token-only
+// repair -- the feeder's cached name needs fixing at the SOURCE (before computeGroupStandings
+// ever reads it), not just where it's reused later. Seen live: "SBWPC" cached for the real
+// "SBPWC" on both a single-decider "M bracket" game AND the downstream "W bracket" seed that
+// references that game's winner.
+const typoPropagationGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99TY01', white: 'F1-SBPWC', white_score: 15, dark: 'F2-LB SHORE', dark_score: 5, round: 'F bracket', division: 'TYPO_TEST', played: true },
+  { date: '2026-06-20', time: '1:00 PM', location: 'X', game_id: '99TY03', white: 'M1(1stF)-SBWPC', white_score: 10, dark: 'M2(2ndE)-COMMERCE', dark_score: 5, round: 'M bracket', division: 'TYPO_TEST', played: true },
+  { date: '2026-06-21', time: '2:00 PM', location: 'X', game_id: '99TY04', white: 'W2(1stL)-OTHERTEAM', white_score: null, dark: 'W3(1stM)-SBWPC', dark_score: null, round: 'W bracket', division: 'TYPO_TEST', played: false },
+];
+const typoPropagationResult = global.Resolver.resolveDivision(typoPropagationGames);
+const w3Game = typoPropagationResult.games.find((g) => g.game_id === '99TY04');
+assertEqual(w3Game.darkTeam, 'SBPWC', 'Typo-propagation test: downstream seed resolves to the real team, not the typo both sides happen to agree on');
+const typoScenario = global.Resolver.buildScenarios(typoPropagationResult.ctx, 'SBPWC', 8);
+assertEqual(typoScenario !== null, true, 'Typo-propagation test: SBPWC gets a real scenario, not TBD');
+assertEqual(typoScenario.tree.gameId, '99TY04', 'Typo-propagation test: SBPWC\'s next game is found under its real name');
+
+// Regression test: a team can already be done with its original day-1 pool (long complete)
+// and have moved on into a later placement bracket via a seed token -- their OWN games
+// there can already be final while the bracket itself still has another pairing pending.
+// findTeamGroupLetter must follow them to that CURRENT bracket, not keep pointing at the
+// original (already-complete, no-longer-relevant) pool. Seen live: a team 1-1 in a 3-team
+// "3rd place" crossover pool, with the third pairing (between the other two teams) unplayed.
+const advancedGroupGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99AG01', white: 'B1-TEAMX', white_score: 10, dark: 'B2-TEAMY', dark_score: 5, round: 'B bracket', division: 'ADV_TEST', played: true },
+  { date: '2026-06-20', time: '1:00 PM', location: 'X', game_id: '99AG02', white: 'T1(3rdB)-TEAMX', white_score: 6, dark: 'T3(3rdH)-TEAMZ', dark_score: 8, round: 'T bracket', division: 'ADV_TEST', played: true },
+  { date: '2026-06-20', time: '2:00 PM', location: 'X', game_id: '99AG03', white: 'T1(3rdB)-TEAMX', white_score: 7, dark: 'T2(3rdE)-TEAMW', dark_score: 4, round: 'T bracket', division: 'ADV_TEST', played: true },
+  { date: '2026-06-21', time: '9:00 AM', location: 'X', game_id: '99AG04', white: 'T2(3rdE)-TEAMW', white_score: null, dark: 'T3(3rdH)-TEAMZ', dark_score: null, round: 'T bracket', division: 'ADV_TEST', played: false },
+];
+const advancedResult = global.Resolver.resolveDivision(advancedGroupGames);
+const advancedScenario = global.Resolver.buildScenarios(advancedResult.ctx, 'TEAMX', 12);
+assertEqual(advancedScenario !== null, true, 'Already-advanced test: TEAMX (pool B long complete, now mid-Group-T) gets a real scenario, not TBD');
+assertEqual(advancedScenario && advancedScenario.floor != null && advancedScenario.ceiling != null, true, 'Already-advanced test: TEAMX gets a real floor/ceiling range');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
