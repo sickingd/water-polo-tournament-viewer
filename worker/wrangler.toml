@@ -10,14 +10,19 @@ routes = [
   { pattern = "splashbracket.com/api/*", zone_name = "splashbracket.com" },
 ]
 
-# Every 3 minutes -- still comfortably beats the "every 5 minutes, reliably" requirement
-# (and Cron Triggers are a primary supported Cloudflare use case, unlike GitHub Actions'
-# best-effort scheduling, which is what this whole migration is fixing). A 1-minute interval
-# was tried first and blew through the free KV tier's 1,000 writes/day quota (1,440/day at
-# 1/min, even before the write-skip-if-unchanged logic in index.js); at 3 minutes that's
-# 480 writes/day worst case, well under the limit with room for more tournaments later.
+# Two staggered patterns instead of one -- confirmed live via `wrangler tail` that a single
+# "*/3 * * * *" trigger handling every non-completed tournament in one invocation was
+# exceeding the Free plan's per-invocation CPU limit on EVERY tick once this season's sheets
+# grew large enough ("Exceeded CPU Limit", silently skipping the write every time -- this is
+# why both tournaments stopped updating). Each tournament alone fits comfortably within
+# budget (verified individually), so splitting them into separate invocations -- one per
+# pattern, each firing every 6 minutes, offset by 3 -- still beats the "every 5 minutes,
+# reliably" requirement while keeping each invocation's CPU cost isolated. scheduled() in
+# index.js reads event.cron to know which pattern fired and only processes that pattern's
+# `cron_group` (see sources.json) of tournaments. KV writes also roughly halve per
+# tournament vs. the old single-pattern setup, well under the free tier's 1,000/day quota.
 [triggers]
-crons = ["*/3 * * * *"]
+crons = ["*/6 * * * *", "3-59/6 * * * *"]
 
 [[kv_namespaces]]
 binding = "TOURNAMENT_KV"

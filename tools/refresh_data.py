@@ -398,11 +398,25 @@ def main():
         if cfg.get('status') == 'completed':
             print(f'[{tid}] completed -- skipping refresh (data is frozen)')
             continue
-        if 'sources' in cfg:
-            data = build_clubchamps_tournament_data(tid, cfg)
-        else:
-            data = build_tournament_data(tid, cfg)
-        write_data_file(tid, data)
+        # This script only ever knows how to read Google Sheets -- a tournament whose
+        # organizers have stopped updating Google entirely (fallback.only_source: true,
+        # mirroring the live Worker's same flag) would just fail here on every run. That's
+        # not a transient error worth retrying; skip it outright and leave its last
+        # committed snapshot as-is rather than erroring.
+        if cfg.get('fallback', {}).get('only_source'):
+            print(f'[{tid}] Google Sheets abandoned for this tournament (OneDrive-only) -- skipping snapshot refresh')
+            continue
+        # One tournament's transient failure (a flaky Google endpoint returning HTTP 429/500,
+        # observed live for the old gviz/tq format) shouldn't abort the whole run and block
+        # every OTHER tournament's snapshot from refreshing too.
+        try:
+            if 'sources' in cfg:
+                data = build_clubchamps_tournament_data(tid, cfg)
+            else:
+                data = build_tournament_data(tid, cfg)
+            write_data_file(tid, data)
+        except Exception as e:
+            print(f'[{tid}] refresh failed, leaving last committed snapshot as-is: {e}', file=sys.stderr)
 
 
 if __name__ == '__main__':

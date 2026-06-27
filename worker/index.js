@@ -14,6 +14,11 @@
 import sources from '../tools/sources.json';
 import { refreshTournamentFromOneDrive } from './onedrive.js';
 
+// Must match wrangler.toml's [triggers].crons[0] exactly -- Cloudflare passes the literal
+// cron expression string back as event.cron, which is how scheduled() tells the two
+// staggered trigger patterns apart (see the cron_group comment in scheduled() below).
+const CRON_GROUP_A_PATTERN = '*/6 * * * *';
+
 const MONTHS = {
   Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
   Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
@@ -386,6 +391,33 @@ function isWithinActiveHours(date, fallbackCfg) {
   return hour >= start && hour < end;
 }
 
+// For a tournament whose organizers have stopped updating Google Sheets entirely (confirmed
+// for the 2026 Boys Futures Superfinals -- the Google doc just sits there unplayed while the
+// OneDrive workbook gets real scores), checking Google on every tick is pure waste: it costs
+// real CPU time (compounding into the "Exceeded CPU Limit" cron failures seen live once a
+// season's sheets grow large enough), AND that specific old-format Google endpoint
+// (fetchSheetCsv's gviz/tq) has been independently observed returning HTTP 500/429 for this
+// sheet regardless. `fallback.only_source: true` skips Google completely -- OneDrive is the
+// sole source, polled on the same poll_interval_minutes boundary as the auto-switchover path
+// below (its reverse-engineered, anti-bot-sensitive flow still shouldn't be hit every tick).
+async function handleScheduledTickOneDriveOnly(tournamentId, cfg, env, opts) {
+  const fb = cfg.fallback;
+  const force = !!(opts && opts.force);
+  if (!force && new Date().getUTCMinutes() % fb.poll_interval_minutes !== 0) {
+    console.log(`[${tournamentId}] OneDrive-only, not due for a re-poll yet`);
+    return;
+  }
+  const cachedRaw = await env.TOURNAMENT_KV.get(tournamentId);
+  const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
+  const data = await refreshTournamentFromOneDrive(cfg, fb, extractTeamName, parseScore);
+  if (sameData(cached, data)) {
+    console.log(`[${tournamentId}] OneDrive-only checked, no change (${data.games.length} games)`);
+    return;
+  }
+  await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(data));
+  console.log(`[${tournamentId}] OneDrive-only updated (${data.games.length} games)`);
+}
+
 // Google Sheets is always primary. A tournament only ever gets here (cfg.fallback present)
 // because its organizers were observed updating a parallel OneDrive workbook instead of the
 // Google Sheet mid-tournament (see onedrive.js's header comment) -- this is the
@@ -482,7 +514,9 @@ export default {
       // cron tick. A completed/frozen tournament must never be re-fetched once archived.
       if (cfg.status === 'completed') return json({ error: 'tournament is archived' }, 409);
       try {
-        if (cfg.fallback) {
+        if (cfg.fallback && cfg.fallback.only_source) {
+          await handleScheduledTickOneDriveOnly(tournamentId, cfg, env, { force: true });
+        } else if (cfg.fallback) {
           // Must NOT just force-overwrite with fresh Google data here -- if a OneDrive
           // fallback is currently active because Google is stale, that would silently
           // regress live OneDrive scores back to stale Google ones. Route through the same
@@ -506,11 +540,28 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    // Two staggered cron patterns (see wrangler.toml) fire on alternating ticks, each as its
+    // OWN invocation with a fresh CPU budget -- handling every non-completed tournament in a
+    // single invocation was overrunning the Workers Free plan's per-invocation CPU limit
+    // every single tick once this season's sheets grew large enough (confirmed live via
+    // `wrangler tail`: "Exceeded CPU Limit" on every firing), which silently stopped BOTH
+    // tournaments from ever refreshing. `cron_group` in sources.json assigns each tournament
+    // to whichever pattern's invocation should handle it.
+    const cronGroup = event.cron === CRON_GROUP_A_PATTERN ? 'A' : 'B';
     for (const [tournamentId, cfg] of Object.entries(sources)) {
       // Once a tournament is flagged completed, it's permanently frozen -- never re-polled,
       // never overwritten. (The registry/automatic-freeze workflow itself is follow-up work;
       // this guard is what makes that safe to flip on later without touching this file.)
       if (cfg.status === 'completed') continue;
+      if (cfg.cron_group && cfg.cron_group !== cronGroup) continue;
+
+      if (cfg.fallback && cfg.fallback.only_source) {
+        ctx.waitUntil(
+          handleScheduledTickOneDriveOnly(tournamentId, cfg, env)
+            .catch((e) => console.error(`[${tournamentId}] OneDrive-only refresh failed (keeping last-known data):`, e.message || e))
+        );
+        continue;
+      }
 
       if (cfg.fallback) {
         ctx.waitUntil(
