@@ -72,10 +72,47 @@
     return dp[m][n];
   }
 
+  // Same typo tolerance as the repair logic below, packaged for reuse: are these two names
+  // plausibly the same club (one's a prefix of the other -- a dropped squad letter like
+  // "DAVIS" for "DAVIS A" -- or they're within edit distance 2 of each other)?
+  function namesLikelySameTeam(a, b) {
+    if (a === b) return true;
+    if (a.startsWith(b) || b.startsWith(a)) return true;
+    return levenshtein(a, b) <= 2;
+  }
+
+  // True when `name` is a real, currently-known competitor in some OTHER tracked standings
+  // group besides the ones in `exceptLets` -- a strong signal that a downstream cell's
+  // cached team for THIS group is corrupted by a cross-reference mix-up (seen live: a
+  // "K1(2ndB)" seed cell cached "DIABLO ALLIANCE B", a real team, but one that only ever
+  // plays in Group D -- it structurally cannot be Group B's actual runner-up). Excludes the
+  // wrapped source's own group (so this never fires for the ordinary "our tiebreaker
+  // disagrees with the official cache" case -- see the officialOverrideGames test, where the
+  // cached name IS a genuine member of the very group it's claimed to come from) AND the
+  // seed's own outer bracket letter -- computeGroupStandings registers a 'seed' token's
+  // cached name into ITS OWN group's roster the moment it's parsed, win or lose or even
+  // unplayed, so without this second exclusion every seed would trivially "know about
+  // itself" and look cross-contaminated.
+  function knownInAnotherGroup(ctx, name, exceptLets) {
+    const except = new Set(Array.isArray(exceptLets) ? exceptLets : [exceptLets]);
+    return Object.keys(ctx.standings).some((let_) => {
+      if (except.has(let_)) return false;
+      return ctx.standings[let_].ranked.some((r) => r.name === name);
+    });
+  }
+
   // Split "E2(1stD)(W#14)-ROSE BOWL" into { head: "E2", parens: ["1stD","W#14"], team: "ROSE BOWL" }
+  // The stray-symbol group between the parens and the team dash tolerates junk characters
+  // the live sheet has shown right after a closing paren (e.g. "K8(2ndA)(16)]-MID PEN", an
+  // extra "]" with no matching open) -- without it, the whole anchored regex fails to match
+  // at all, head falls back to the ENTIRE raw string, and parseToken's catch-all then treats
+  // that garbled blob as a literal (always-locked) team name instead of the real seed it is.
+  // Deliberately excludes letters/digits (not just "-") so it can never "steal" characters
+  // that legitimately belong to the head's own {LET}{pos} (e.g. the "1" in "B1-LAMORINDA")
+  // when there's no real junk to skip.
   function splitToken(raw) {
     const s = (raw || '').trim();
-    const m = /^([^()-]+?)((?:\([^()]*\))*)(?:-(.*))?$/.exec(s);
+    const m = /^([^()-]+?)((?:\([^()]*\))*)[^-A-Za-z0-9]*(?:-(.*))?$/.exec(s);
     if (!m) return { head: s, parens: [], team: null };
     const head = m[1].trim();
     const team = m[3] && m[3].trim() ? m[3].trim() : null;
@@ -410,7 +447,24 @@
         if (tok.team) return { team: tok.team, locked: true };
         return { team: null, locked: false, hint: `${tok.let}${tok.pos}` };
       case 'seed': {
-        if (tok.team) return { team: tok.team, locked: true };
+        if (tok.team) {
+          // Unlike 'finish' below, a seed's cached team has historically been trusted
+          // outright with no cross-check at all -- but the live sheet shows the exact same
+          // downstream-formula staleness here too: a dropped squad letter ("DAVIS" cached
+          // for the real "DAVIS A"), a swapped letter ("SBWPC" for "SBPWC"), or a flat-out
+          // cross-reference mix-up (a "(2ndB)" cell caching "DIABLO ALLIANCE B", a real team,
+          // but one that only ever plays in Group D). Resolve the wrapped source(s) anyway
+          // and only override the cache when the live answer plausibly IS the same club
+          // (typo repair) or the cache is a real team that structurally can't belong here
+          // (cross-group mix-up) -- otherwise trust the cache as-is, same as 'finish'.
+          for (const src of tok.sources) {
+            const r = resolveToken(src, ctx, depth + 1);
+            if (!r.team || r.team === tok.team) continue;
+            if (namesLikelySameTeam(r.team, tok.team)) return r;
+            if (src.type === 'finish' && knownInAnotherGroup(ctx, tok.team, [src.let, tok.let])) return r;
+          }
+          return { team: tok.team, locked: true };
+        }
         let best = { hint: `${tok.let}${tok.pos}` };
         for (const src of tok.sources) {
           const r = resolveToken(src, ctx, depth + 1);
@@ -443,6 +497,15 @@
           // different real teams never get merged.
           const close = g.ranked.filter((r) => levenshtein(r.name, tok.team) <= 2);
           if (close.length === 1) return { team: close[0].name, locked: true };
+          // Last resort: no repair matched anyone in THIS group's roster at all. If the
+          // cached name is a real competitor from a totally different group, and this
+          // group's own standings are fully decided, that's a cross-reference mix-up, not a
+          // legitimate "official result overrides our tiebreaker" case (contrast the
+          // officialOverrideGames test, where the cached name IS one of this group's own
+          // competitors) -- prefer the live-computed answer over an impossible cache.
+          if (g.complete && g.ranked[tok.ord - 1] && knownInAnotherGroup(ctx, tok.team, tok.let)) {
+            return { team: g.ranked[tok.ord - 1].name, locked: true };
+          }
           return { team: tok.team, locked: true };
         }
         if (g && g.complete && g.ranked[tok.ord - 1]) {
@@ -683,10 +746,6 @@
   // 1st/2nd there depends on every result in the group, not just one game -- so this only
   // fires for a group that is exactly one game between exactly two teams.
   function nextGameAfterByGroupFinish(ctx, entry, wl) {
-    const wlet = (entry.white.type === 'slot' || entry.white.type === 'seed') && entry.white.let;
-    const dlet = (entry.dark.type === 'slot' || entry.dark.type === 'seed') && entry.dark.let;
-    if (!wlet || wlet !== dlet) return null;
-    const group = ctx.standings[wlet];
     // `group.size` (the count of *named* teams seen so far) is unreliable here -- these
     // mini-groups' entrants are seed tokens with no cached team until their own source
     // group finishes, so computeGroupStandings can't populate records for them even once
@@ -694,8 +753,29 @@
     // for this letter, fixed by the bracket's structure from the start -- a real 3+-team
     // pool always schedules 3+ games, so exactly one here reliably means "two entrants,
     // one game", independent of whether anyone's name is resolvable yet.
-    if (!group || group.games.length !== 1) return null;
-    return findFeederGameForFinish(ctx, wl === 'W' ? 1 : 2, wlet);
+    function tryLet(let_) {
+      if (!let_) return null;
+      const group = ctx.standings[let_];
+      if (group && group.games.length !== 1) return null;
+      // Only the direction actually being asked about needs a feeder -- a winner-only
+      // mini-group (no consolation game at all for the loser) is common and legitimate, so
+      // requiring BOTH directions to resolve here would wrongly reject it.
+      const feeder = findFeederGameForFinish(ctx, wl === 'W' ? 1 : 2, let_);
+      if (!feeder || feeder.game === entry) return null;
+      return feeder;
+    }
+    const wlet = (entry.white.type === 'slot' || entry.white.type === 'seed') && entry.white.let;
+    const dlet = (entry.dark.type === 'slot' || entry.dark.type === 'seed') && entry.dark.let;
+    if (wlet && wlet === dlet) return tryLet(wlet);
+    // A mismatched letter on one side is a genuine spreadsheet typo on an otherwise-correctly
+    // cached seed (e.g. "G2(2ndH)-CIU" should read "O2(2ndH)-CIU" to match its sibling
+    // "O1(1stG)-MERIDIAN") -- the wrapped source and cached team are still right, just the
+    // prefix letter is wrong, so the same-letter check above can't recognize this as a single
+    // decider game. Try each side's own letter independently instead; only trust one when it
+    // unambiguously has both a 1st- AND 2nd-place downstream consumer elsewhere (a real
+    // round-robin pool that happens to share the letter, like a 4-team "G bracket", fails the
+    // games.length check above and is correctly skipped).
+    return tryLet(wlet) || tryLet(dlet);
   }
 
   // A 4-team mini-bracket (semis -> "1/2 {LET}" final + "3/4 {LET}" consolation) labels its
@@ -781,6 +861,51 @@
     return ord ? [parseInt(ord[1], 10), parseInt(ord[2], 10)] : null;
   }
 
+  // Does ANY position in this group get referenced downstream as a group finish (e.g.
+  // "1stG", or a seed wrapping it like "X4(1stG)")? If none do, the group isn't a feeder
+  // for anything further -- it's itself a terminal placement bracket, just one whose round
+  // label never spelled out the actual numeric range (unlike "17-20 RR").
+  function groupHasAnyFeeder(ctx, let_, positionCount) {
+    for (let ord = 1; ord <= positionCount; ord++) {
+      if (findFeederGameForFinish(ctx, ord, let_)) return true;
+    }
+    return false;
+  }
+
+  // Some placement round robins ARE labeled with an explicit range ("17-20 RR"), but others
+  // (e.g. a plain "G bracket" that's actually the bottom 5 placements of an 11-team
+  // division) carry no number at all and nothing downstream ever references their finish --
+  // the only way to know what places that bracket decides is to see what's NOT claimed by
+  // every other group. Safe only when there's exactly one such unlabeled, non-feeding group
+  // in the whole division (two unknowns can't be split between them) and the leftover count
+  // matches the group's own entrant count exactly; anything less clear-cut is left
+  // unresolved rather than guessed at (mirrors allFinalPlacements' same leftover-group logic
+  // in tournament_app.html, just applied here before the group is necessarily complete,
+  // since the BAND a group occupies is fixed by bracket structure, not by its results).
+  function inferUnlabeledTerminalRange(ctx, let_, totalTeams) {
+    if (!totalTeams) return null;
+    const claimed = new Set();
+    let myCount = null;
+    let ambiguous = false;
+    Object.keys(ctx.standings).forEach((L) => {
+      const group = ctx.standings[L];
+      if (!group.games.length) return;
+      const positionCount = groupEntrants(ctx, L).length;
+      if (L === let_) { myCount = positionCount; return; }
+      const labeled = rrPlacementRange(group.games[0]);
+      if (labeled) {
+        for (let p = labeled[0]; p <= labeled[1]; p++) claimed.add(p);
+        return;
+      }
+      if (!groupHasAnyFeeder(ctx, L, positionCount)) ambiguous = true;
+    });
+    if (ambiguous || myCount == null) return null;
+    const gap = [];
+    for (let p = 1; p <= totalTeams; p++) if (!claimed.has(p)) gap.push(p);
+    if (gap.length !== myCount) return null;
+    return [gap[0], gap[gap.length - 1]];
+  }
+
   // Build the forward decision tree for a team: starting from whichever upcoming game
   // they currently occupy a locked slot in, recurse through win/lose branches using the
   // reverse reference index until hitting a terminal placement.
@@ -864,6 +989,15 @@
       if (myGroup && !myGroup.complete) {
         const myRange = groupRankRanges(myGroup).get(teamName);
         if (myRange) {
+          // Same unlabeled-terminal-bracket check as the pendingPoolGame branch below: if
+          // this group itself doesn't feed anywhere, it IS the placement band, and the
+          // dead-end widening just below would otherwise collapse it to a single falsely
+          // narrow value (e.g. "locked into 11th") instead of the real range.
+          const myPositionCount = groupEntrants(ctx, myLet).length;
+          if (!groupHasAnyFeeder(ctx, myLet, myPositionCount)) {
+            const inferred = inferUnlabeledTerminalRange(ctx, myLet, totalTeams);
+            if (inferred) return { tree: { terminal: true, rrRange: inferred }, floor: inferred[1], ceiling: inferred[0] };
+          }
           const poolBranches = [];
           for (let ord = myRange.ceiling; ord <= myRange.floor; ord++) {
             const feeder = findFeederGameForFinish(ctx, ord, myLet);
@@ -931,6 +1065,21 @@
           // either). groupEntrants derives the real position count from the tokens'
           // {LET}{pos} grammar directly, independent of whether anyone's named yet.
           const positionCount = groupEntrants(ctx, wlet).length;
+          // This whole group might not feed forward into anything at all -- it's itself
+          // the terminal placement band (see inferUnlabeledTerminalRange). Check that
+          // BEFORE building poolBranches: per-ord, no feeder ever exists for any of them,
+          // and walking each branch separately would otherwise dead-end into the same
+          // blunt totalTeams widening every time, falsely narrowing this team's range to a
+          // single locked-looking value instead of the real band it's actually competing
+          // for.
+          if (!groupHasAnyFeeder(ctx, wlet, positionCount)) {
+            const inferred = inferUnlabeledTerminalRange(ctx, wlet, totalTeams);
+            if (inferred) {
+              node.terminal = true;
+              node.rrRange = inferred;
+              return node;
+            }
+          }
           node.terminal = true;
           node.poolBranches = [];
           for (let ord = 1; ord <= positionCount; ord++) {

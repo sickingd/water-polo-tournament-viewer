@@ -900,16 +900,24 @@ function placementTrackerHTML(resolved, division) {
     return { name: t.name, record, floor, ceiling, nextOpponent, seedKey, flatRank };
   });
 
-  // Ranked by expected finishing place (ceiling, then floor) -- before the tournament starts
-  // this is just the seeding, since every team's range is still its full possible spread.
-  // When two teams project to the exact same range, that's not a real-performance tiebreak;
-  // fall back to current standings rank (flat round robins) or initial seed (group + position)
-  // rather than current win count.
+  // Ranked by expected finishing place (ceiling, then floor) first -- a team that can still
+  // reach 1st outranks one capped at 5th, and between two teams who can both still reach 1st,
+  // the one with the tighter/better floor (e.g. 1st-8th beats 1st-24th) outranks the other.
+  // Only once that's tied does on-the-court performance break the tie: overall record, then
+  // goal differential, then (only if even THOSE are tied, or there's no scenario at all to
+  // compare) current standings rank for a flat round robin, then initial seed.
   rows.sort((a, b) => {
     const ac = a.ceiling == null ? 999 : a.ceiling, bc = b.ceiling == null ? 999 : b.ceiling;
     if (ac !== bc) return ac - bc;
     const af = a.floor == null ? 999 : a.floor, bf = b.floor == null ? 999 : b.floor;
     if (af !== bf) return af - bf;
+    // A team with no final games at all has a null record -- treat that as neutral (0), not
+    // as the worst possible record, or a team that hasn't played yet would rank BELOW one
+    // that's already lost a game.
+    const aw = a.record ? a.record.w - a.record.l : 0, bw = b.record ? b.record.w - b.record.l : 0;
+    if (aw !== bw) return bw - aw;
+    const agd = a.record ? a.record.gf - a.record.ga : 0, bgd = b.record ? b.record.gf - b.record.ga : 0;
+    if (agd !== bgd) return bgd - agd;
     const ar = a.flatRank == null ? 999 : a.flatRank, br = b.flatRank == null ? 999 : b.flatRank;
     if (ar !== br) return ar - br;
     const ak = a.seedKey == null ? 999999 : a.seedKey, bk = b.seedKey == null ? 999999 : b.seedKey;
