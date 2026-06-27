@@ -525,6 +525,14 @@
         // entry for the letter whatsoever, so every check above is structurally unable to
         // fire. Mirrors the 'seed' case's own source-walking just below.
         let bestFinishHint = { hint: `${ordWord(tok.ord)} of Group ${tok.let}` };
+        // A group that's really just one decisive game between two seeded entrants (e.g.
+        // "N1(1stE)-SOCAL BLACK" vs "N2(2ndF)-USA CADET") has a real matchup behind "1st of
+        // Group N" even before it's played -- attach it as a feederGame exactly like a W#/L#
+        // progress ref already does (see resolveFromGame/labelWithMatchup), so the display
+        // layer expands it the same way: "1st of Group N (SOCAL BLACK vs USA CADET)" instead
+        // of a bare, unhelpful ordinal. A real multi-game round robin has no single matchup
+        // to point at this way, so this only fires for the clean 2-entrant case.
+        if (g && g.games.length === 1) bestFinishHint.feederGame = g.games[0];
         for (const src of tok.sources || []) {
           const r = resolveToken(src, ctx, depth + 1);
           if (r.team) return r;
