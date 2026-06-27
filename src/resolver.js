@@ -976,7 +976,7 @@
   // not single-elimination -- there's no single win/lose branch to the next game (the
   // final rank depends on all those games together). But the bracket's own label already
   // bounds the placement, so use that directly instead of leaving floor/ceiling unknown.
-  function rrPlacementRange(entry) {
+  function rrPlacementRange(entry, ctx) {
     const round = (entry.raw.round || '').trim();
     const rr = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec(round);
     if (rr) return [parseInt(rr[1], 10), parseInt(rr[2], 10)];
@@ -986,7 +986,20 @@
     // is what keeps this from also matching an unrelated *seeding* label like "1-4 semi
     // 1v3" (bare numbers, no ordinals -- a real win/lose semifinal, not a placement bound).
     const ord = /^(\d+)(?:st|nd|rd|th)\s*-\s*(\d+)(?:st|nd|rd|th)/i.exec(round);
-    return ord ? [parseInt(ord[1], 10), parseInt(ord[2], 10)] : null;
+    if (!ord) return null;
+    // But that ordinal-suffixed shape is ALSO used, live, for a genuine single-elimination
+    // semifinal pair sharing a letter ("9th-12th semi 9v12", two independent games, every
+    // position playing exactly once -- never a pool), not just a real round robin ("25th-30th
+    // N1,N3", confirmed by computeGroupStandings' own structural verification). Trust the
+    // range only when ctx confirms this entry's own letter actually made it into tracked
+    // standings as a real multi-game pool -- a single-elim pair never does, so it's correctly
+    // left to the normal win/lose branch walk instead of being cut off here.
+    if (ctx) {
+      const wl = (entry.white.type === 'slot' || entry.white.type === 'seed') && entry.white.let;
+      const dl = (entry.dark.type === 'slot' || entry.dark.type === 'seed') && entry.dark.let;
+      if (wl && dl && wl === dl && !ctx.standings[wl]) return null;
+    }
+    return [parseInt(ord[1], 10), parseInt(ord[2], 10)];
   }
 
   // Does ANY position in this group get referenced downstream as a group finish (e.g.
@@ -1020,7 +1033,7 @@
       if (!group.games.length) return;
       const positionCount = groupEntrants(ctx, L).length;
       if (L === let_) { myCount = positionCount; return; }
-      const labeled = rrPlacementRange(group.games[0]);
+      const labeled = rrPlacementRange(group.games[0], ctx);
       if (labeled) {
         for (let p = labeled[0]; p <= labeled[1]; p++) claimed.add(p);
         return;
@@ -1097,12 +1110,12 @@
       // team's exact rank is still pending -- fall back to the bracket's own bounded
       // range rather than reporting nothing. Once every team in the group is done,
       // finalPlacementFor's standings-based lookup takes over with the exact rank.
-      const rrGame = myGames.find((e) => rrPlacementRange(e));
+      const rrGame = myGames.find((e) => rrPlacementRange(e, ctx));
       if (rrGame) {
         const let_ = (rrGame.white.type === 'seed' && rrGame.white.let) || (rrGame.dark.type === 'seed' && rrGame.dark.let);
         const group = let_ && ctx.standings[let_];
         if (!group || !group.complete) {
-          const range = rrPlacementRange(rrGame);
+          const range = rrPlacementRange(rrGame, ctx);
           return { tree: { terminal: true, rrRange: range }, floor: range[1], ceiling: range[0] };
         }
       }
@@ -1168,7 +1181,7 @@
         round: entry.raw.round,
         final: entry.final,
       };
-      const rrRange = rrPlacementRange(entry);
+      const rrRange = rrPlacementRange(entry, ctx);
       if (rrRange) {
         node.terminal = true;
         node.rrRange = rrRange;
@@ -1382,7 +1395,7 @@
     function walkSingleGame(entry, mySide, path, depth) {
       if (depth > 14) return;
       const node = pushGameNode(entry, mySide, path);
-      const rrRange = rrPlacementRange(entry);
+      const rrRange = rrPlacementRange(entry, ctx);
       if (rrRange) { node.rrRange = rrRange; return; }
       if (entry.final) return;
       const winPlace = terminalPlace(entry, 'W');

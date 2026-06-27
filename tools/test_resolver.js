@@ -268,5 +268,26 @@ const advancedScenario = global.Resolver.buildScenarios(advancedResult.ctx, 'TEA
 assertEqual(advancedScenario !== null, true, 'Already-advanced test: TEAMX (pool B long complete, now mid-Group-T) gets a real scenario, not TBD');
 assertEqual(advancedScenario && advancedScenario.floor != null && advancedScenario.ceiling != null, true, 'Already-advanced test: TEAMX gets a real floor/ceiling range');
 
+// Regression test: a single-elimination semifinal pair sharing a letter ("9th-12th semi
+// 9v12", every position playing exactly once) uses the EXACT same ordinal-range label shape
+// as a genuine round-robin placement pool ("25th-30th N1,N3"). rrPlacementRange must not
+// treat the semifinal pair as a placement-RR bound and cut the tree short there -- there IS
+// a real win/lose branch to walk (into a "9th" / "11th" final), unlike a real pool. Seen
+// live: 14U Boys D1's "908" only showed one possible game (the semifinal itself) instead of
+// the full tree through to 9th/10th/11th/12th depending on both results.
+const semiPairOrdinalGames = [
+  { date: '2026-06-19', time: '8:00 AM', location: 'X', game_id: '99SP01', white: 'N1(W#PlayinA)-TEAMA', white_score: null, dark: 'N4(W#PlayinD)-TEAMD', dark_score: null, round: '9th-12th semi 9v12', division: 'SEMI_TEST', played: false },
+  { date: '2026-06-19', time: '9:00 AM', location: 'X', game_id: '99SP02', white: 'N2(W#PlayinB)-TEAMB', white_score: null, dark: 'N3(W#PlayinC)-TEAMC', dark_score: null, round: '9th-12th semi 10v11', division: 'SEMI_TEST', played: false },
+  { date: '2026-06-20', time: '1:00 PM', location: 'X', game_id: '99SP03', white: 'W#N1/N4', white_score: null, dark: 'W#N2/N3', dark_score: null, round: '9th', division: 'SEMI_TEST', played: false },
+  { date: '2026-06-20', time: '2:00 PM', location: 'X', game_id: '99SP04', white: 'L#N1/N4', white_score: null, dark: 'L#N2/N3', dark_score: null, round: '11th', division: 'SEMI_TEST', played: false },
+];
+const semiPairResult = global.Resolver.resolveDivision(semiPairOrdinalGames);
+assertEqual(!!semiPairResult.standings['N'], false, 'Semi-pair-ordinal test: the single-elim pair is not tracked as a pool (sanity check)');
+const semiPairAll = global.Resolver.buildAllPossibleGames(semiPairResult.ctx, 'TEAMA');
+assertEqual(semiPairAll.length, 7, 'Semi-pair-ordinal test: TEAMA gets the full win/lose tree, not a single collapsed rrRange node');
+const semiPairScenario = global.Resolver.buildScenarios(semiPairResult.ctx, 'TEAMA', 12);
+assertEqual(semiPairScenario.ceiling, 9, 'Semi-pair-ordinal test: ceiling still correctly bounds at 9 (best case)');
+assertEqual(semiPairScenario.floor, 12, 'Semi-pair-ordinal test: floor still correctly bounds at 12 (worst case)');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
