@@ -28,6 +28,14 @@ crons = ["*/6 * * * *", "3-59/6 * * * *"]
 binding = "TOURNAMENT_KV"
 id = "c157fb642daf4a3bafee99582667634c"
 
+# `wrangler tail` is a LIVE-only stream -- nothing is buffered or stored, so a failure (e.g.
+# the OneDrive fallback's fragile, anti-bot-sensitive flow going dark for hours) is invisible
+# after the fact unless someone happened to be tailing at that exact moment. This persists
+# every console.log/console.error from every invocation (including scheduled() cron ticks),
+# queryable in the dashboard's Logs tab or via the API, instead of vanishing instantly.
+[observability]
+enabled = true
+
 # NOTE: this account is on the Free plan, which rejects an explicit [limits] cpu_ms override
 # outright ("CPU limits are not supported for the Free plan") -- confirmed by a failed deploy
 # attempt, not docs. So the OneDrive fallback path (onedrive.js's unzip + XML parse, measured
