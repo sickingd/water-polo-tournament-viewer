@@ -147,8 +147,40 @@ check('Tournament tab shows the viewing bar', scheduleHtml.includes('Viewing Bra
 check('Tournament tab shows the Placement Tracker', scheduleHtml.includes('Placement Tracker'));
 check('Tournament tab does NOT show individual game cards (moved to Bracket tab)', !scheduleHtml.includes('game-card'));
 check('Placement Tracker has a GD column', scheduleHtml.includes('tracker-gd'));
-check('Placement Tracker shows a next-opponent hint', scheduleHtml.includes('tracker-next'));
-check('Placement Tracker opponent hints are short (no nested matchup parens)', !/tracker-next">\(vs [^)]*\([^)]*\(/.test(scheduleHtml));
+
+// The next-opponent hint can only appear for a team that still HAS an upcoming game -- the
+// frozen Superfinals viewed above is fully completed (every team locked into a final
+// placement), so a synthetic mid-tournament division is injected to test it data-independently.
+// Group A is fully played (ALPHA 1st, BETA 2nd, GAMMA 3rd); a Cross game pairs 2ndA vs 3rdA;
+// a decider pits 1stA-ALPHA against the winner of that Cross -- so ALPHA's projected next
+// opponent is "Winner of Cross5 (BETA vs GAMMA)", a NESTED-paren matchup that the tracker must
+// strip down to just "Winner of Cross5" for its compact one-line display.
+// Group B (DELTA/EPSILON) exists only so the division has more teams than Group A's 3 --
+// otherwise allFinalPlacements treats a complete group whose size equals the whole division
+// as a flat round robin and locks every team into a final placement (no scenario, no next
+// opponent). With 5 teams total and two separate complete pools, nothing is yet pinned, so
+// ALPHA keeps a live scenario.
+vm.runInContext(`
+  TD.games.push(
+    { date: '2026-06-20', time: '8:00 AM', location: 'X', game_id: 'TRK01', white: 'A1-ALPHA', white_score: 10, dark: 'A2-BETA', dark_score: 5, round: 'A bracket', division: 'TRK_TEST', played: true },
+    { date: '2026-06-20', time: '9:00 AM', location: 'X', game_id: 'TRK02', white: 'A1-ALPHA', white_score: 12, dark: 'A3-GAMMA', dark_score: 4, round: 'A bracket', division: 'TRK_TEST', played: true },
+    { date: '2026-06-20', time: '10:00 AM', location: 'X', game_id: 'TRK03', white: 'A2-BETA', white_score: 9, dark: 'A3-GAMMA', dark_score: 6, round: 'A bracket', division: 'TRK_TEST', played: true },
+    { date: '2026-06-20', time: '8:00 AM', location: 'X', game_id: 'TRK06', white: 'B1-DELTA', white_score: 11, dark: 'B2-EPSILON', dark_score: 3, round: 'B bracket', division: 'TRK_TEST', played: true },
+    { date: '2026-06-21', time: '1:00 PM', location: 'X', game_id: 'TRK04', white: '2ndA-BETA', white_score: null, dark: '3rdA-GAMMA', dark_score: null, round: 'Cross5', division: 'TRK_TEST', played: false },
+    { date: '2026-06-21', time: '3:00 PM', location: 'X', game_id: 'TRK05', white: '1stA-ALPHA', white_score: null, dark: 'W#Cross5', dark_score: null, round: 'Playin', division: 'TRK_TEST', played: false }
+  );
+  TD.teams.push(
+    { name: 'ALPHA', division: 'TRK_TEST' }, { name: 'BETA', division: 'TRK_TEST' }, { name: 'GAMMA', division: 'TRK_TEST' },
+    { name: 'DELTA', division: 'TRK_TEST' }, { name: 'EPSILON', division: 'TRK_TEST' }
+  );
+  resolvedCache = {};
+  selectBracket('TRK_TEST');
+  showTab('schedule');
+`, sandbox);
+const trackerSyntheticHtml = el('scheduleContent').innerHTML;
+check('Placement Tracker shows a next-opponent hint', trackerSyntheticHtml.includes('tracker-next'));
+check('Placement Tracker opponent hints are short (no nested matchup parens)', !/tracker-next">\(vs [^)]*\([^)]*\(/.test(trackerSyntheticHtml));
+check('Placement Tracker strips the nested feeder matchup to the top label only', /tracker-next">\(vs Winner of Cross5\)/.test(trackerSyntheticHtml));
 
 // Tournament switcher: re-selecting the same (only) tournament should be a no-op, not crash.
 vm.runInContext("selectTournament('2026-girls-futures-superfinals')", sandbox);
@@ -222,6 +254,68 @@ vm.runInContext("selectBracket('18U_GIRLS_D1')", sandbox);
 check('selectBracket refreshes the Tournament tab immediately when it is active', el('scheduleContent').innerHTML.includes('18U'));
 vm.runInContext("selectBracket('16U_GIRLS_D1'); showTab('standings'); selectBracket('18U_GIRLS_D1');", sandbox);
 check('selectBracket refreshes the Bracket tab immediately when it is active', el('standingsContent').innerHTML.includes('18U'));
+
+// ===========================================================================================
+// Direct unit tests for the app's pure helper functions (called straight, not via DOM smoke).
+// ===========================================================================================
+const appFn = (name) => vm.runInContext(name, sandbox);
+
+// shortGameId strips the division prefix to just the per-game number. For the Boys
+// "{age}{B}D{div}{num}" id shape the division digit is part of the prefix and is dropped too
+// ("14BD310" -> "10"); the Girls "{DIVISION}-{NNN}" shape keeps the full trailing number
+// including any leading zero ("14U_GIRLS-011" -> "011").
+const shortGameId = appFn('shortGameId');
+check('shortGameId strips a "{DIVISION}-{NNN}" prefix', shortGameId('18U_GIRLS-127') === '127');
+check('shortGameId drops the division digit of a "{age}{B}D{div}{num}" id', shortGameId('14BD310') === '10');
+check('shortGameId handles the old Girls "{n}GD{d}{num}" id', shortGameId('16GD133') === '33');
+check('shortGameId preserves a leading zero', shortGameId('14U_GIRLS-011') === '011');
+
+// ordWord: the 11th/12th/13th teens are all "th" despite ending in 1/2/3.
+const appOrdWord = appFn('ordWord');
+check('ordWord 1/2/3 use st/nd/rd', appOrdWord(1) === '1st' && appOrdWord(2) === '2nd' && appOrdWord(3) === '3rd');
+check('ordWord 11/12/13 are all "th" (teens exception)', appOrdWord(11) === '11th' && appOrdWord(12) === '12th' && appOrdWord(13) === '13th');
+check('ordWord 21/111 resume the normal suffix', appOrdWord(21) === '21st' && appOrdWord(111) === '111th');
+
+// Build one synthetic division to drive recordFor / allFinalPlacements / the tracker sort
+// against, so these don't depend on the constantly-changing live data. A1-WIN beats A2-LOSE in
+// a shootout (8.3 vs 8.1); a "3rd 3v4" game is a real absolute placement; a "3rd/4thB" game is
+// group-relative and must NOT be read as an absolute place.
+vm.runInContext(`
+  TD.games.push(
+    { date: 'd', time: '8:00 AM', location: 'X', game_id: 'ZT1', white: 'A1-WIN', white_score: 8.3, dark: 'A2-LOSE', dark_score: 8.1, round: 'A bracket', division: 'ZT', played: true },
+    { date: 'd', time: '9:00 AM', location: 'X', game_id: 'ZT2', white: 'C1-THIRDWIN', white_score: 10, dark: 'C2-THIRDLOSE', dark_score: 6, round: '3rd 3v4', division: 'ZT', played: true },
+    { date: 'd', time: '10:00 AM', location: 'X', game_id: 'ZT3', white: 'D1-RELWIN', white_score: 10, dark: 'D2-RELLOSE', dark_score: 6, round: '3rd/4thB', division: 'ZT', played: true }
+  );
+  ['WIN','LOSE','THIRDWIN','THIRDLOSE','RELWIN','RELLOSE'].forEach((n) => TD.teams.push({ name: n, division: 'ZT' }));
+  resolvedCache = {};
+`, sandbox);
+const ztResolved = vm.runInContext("getResolved('ZT')", sandbox);
+const ztRecord = appFn('recordFor')(ztResolved, 'WIN');
+check('recordFor credits a shootout win', ztRecord.w === 1 && ztRecord.l === 0);
+check('recordFor excludes shootout decimals from goal differential (8-8, not 8.3-8.1)', ztRecord.gf - ztRecord.ga === 0);
+const ztPlacements = appFn('allFinalPlacements')(ztResolved, 6);
+check('allFinalPlacements reads an absolute "3rd 3v4" decider (winner 3rd, loser 4th)', ztPlacements.get('THIRDWIN') === 3 && ztPlacements.get('THIRDLOSE') === 4);
+check('allFinalPlacements does NOT treat a group-relative "3rd/4thB" as an absolute place', ztPlacements.get('RELWIN') === undefined && ztPlacements.get('RELLOSE') === undefined);
+
+// Placement Tracker sort order: best reachable place (ceiling) leads; ties on the range break
+// on record, then goal differential. HIGH/HIGH2 are still in pool (can reach 1st) so they lead
+// the three "5-7 RR" teams (capped at 5th); among those three, KONE's 2-0 record sorts it ahead.
+vm.runInContext(`
+  TD.games.push(
+    { date: 'd', time: '8:00 AM', location: 'X', game_id: 'ST1', white: 'A1-HIGH', white_score: null, dark: 'A2-HIGH2', dark_score: null, round: 'A bracket', division: 'SORTT', played: false },
+    { date: 'd', time: '8:00 AM', location: 'X', game_id: 'ST2', white: 'K1-KONE', white_score: 10, dark: 'K2-KTWO', dark_score: 3, round: '5-7 RR', division: 'SORTT', played: true },
+    { date: 'd', time: '9:00 AM', location: 'X', game_id: 'ST3', white: 'K1-KONE', white_score: 11, dark: 'K3-KTHREE', dark_score: 2, round: '5-7 RR', division: 'SORTT', played: true },
+    { date: 'd', time: '10:00 AM', location: 'X', game_id: 'ST4', white: 'K2-KTWO', white_score: null, dark: 'K3-KTHREE', dark_score: null, round: '5-7 RR', division: 'SORTT', played: false }
+  );
+  ['HIGH','HIGH2','KONE','KTWO','KTHREE'].forEach((n) => TD.teams.push({ name: n, division: 'SORTT' }));
+  resolvedCache = {};
+  selectBracket('SORTT');
+  showTab('schedule');
+`, sandbox);
+const sortTracker = el('scheduleContent').innerHTML;
+const sortOrder = [...sortTracker.matchAll(/rank-num">(\d+)<\/span>([A-Z0-9 ]+?)(?:<| )/g)].map((m) => m[2].trim());
+check('Tracker sort: higher-ceiling pool teams (can reach 1st) lead lower-capped placement teams', sortOrder.indexOf('HIGH') < sortOrder.indexOf('KONE') && sortOrder.indexOf('HIGH2') < sortOrder.indexOf('KONE'));
+check('Tracker sort: among teams with the same range, the better record sorts first', sortOrder.indexOf('KONE') < sortOrder.indexOf('KTWO') && sortOrder.indexOf('KONE') < sortOrder.indexOf('KTHREE'));
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

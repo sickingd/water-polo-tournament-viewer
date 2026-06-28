@@ -1,0 +1,884 @@
+{
+  "12U_GIRLS_D1": {
+    "standings": {
+      "A": [
+        "NEWPORT BEACH A",
+        "COMMERCE",
+        "LA PREMIER"
+      ],
+      "B": [
+        "BACK BAY",
+        "LAMORINDA A",
+        "TEMPLE CITY"
+      ],
+      "C": [
+        "DEL MAR",
+        "STANFORD A",
+        "FOOTHILL CLUB"
+      ],
+      "D": [
+        "SAN CLEMENTE",
+        "680",
+        "LAMORINDA B"
+      ],
+      "G": [
+        "LA PREMIER",
+        "TEMPLE CITY",
+        "FOOTHILL CLUB",
+        "LAMORINDA B"
+      ]
+    },
+    "finalPlacements": {
+      "680": 4,
+      "BACK BAY": 6,
+      "COMMERCE": 7,
+      "DEL MAR": 2,
+      "FOOTHILL CLUB": 11,
+      "LA PREMIER": 9,
+      "LAMORINDA A": 5,
+      "LAMORINDA B": 12,
+      "NEWPORT BEACH A": 1,
+      "SAN CLEMENTE": 3,
+      "STANFORD A": 8,
+      "TEMPLE CITY": 10
+    },
+    "games": {
+      "12GD101": "NEWPORT BEACH A | LA PREMIER | final",
+      "12GD102": "DEL MAR | FOOTHILL CLUB | final",
+      "12GD103": "LAMORINDA A | TEMPLE CITY | final",
+      "12GD104": "680 | LAMORINDA B | final",
+      "12GD105": "COMMERCE | LA PREMIER | final",
+      "12GD106": "STANFORD A | FOOTHILL CLUB | final",
+      "12GD107": "BACK BAY | TEMPLE CITY | final",
+      "12GD108": "SAN CLEMENTE | LAMORINDA B | final",
+      "12GD109": "NEWPORT BEACH A | COMMERCE | final",
+      "12GD110": "DEL MAR | STANFORD A | final",
+      "12GD111": "LAMORINDA A | BACK BAY | final",
+      "12GD112": "680 | SAN CLEMENTE | final",
+      "12GD113": "NEWPORT BEACH A | STANFORD A | final",
+      "12GD114": "COMMERCE | DEL MAR | final",
+      "12GD115": "BACK BAY | 680 | final",
+      "12GD116": "LAMORINDA A | SAN CLEMENTE | final",
+      "12GD117": "LA PREMIER | LAMORINDA B | final",
+      "12GD118": "TEMPLE CITY | FOOTHILL CLUB | final",
+      "12GD119": "NEWPORT BEACH A | DEL MAR | final",
+      "12GD120": "COMMERCE | STANFORD A | final",
+      "12GD121": "BACK BAY | SAN CLEMENTE | final",
+      "12GD122": "LAMORINDA A | 680 | final",
+      "12GD123": "LA PREMIER | FOOTHILL CLUB | final",
+      "12GD124": "TEMPLE CITY | LAMORINDA B | final",
+      "12GD125": "DEL MAR | 680 | final",
+      "12GD126": "NEWPORT BEACH A | SAN CLEMENTE | final",
+      "12GD127": "STANFORD A | BACK BAY | final",
+      "12GD128": "COMMERCE | LAMORINDA A | final",
+      "12GD129": "LA PREMIER | TEMPLE CITY | final",
+      "12GD130": "FOOTHILL CLUB | LAMORINDA B | final",
+      "12GD131": "DEL MAR | NEWPORT BEACH A | final",
+      "12GD132": "SAN CLEMENTE | 680 | final",
+      "12GD133": "LAMORINDA A | BACK BAY | final",
+      "12GD134": "STANFORD A | COMMERCE | final"
+    }
+  },
+  "12U_GIRLS_D2": {
+    "standings": {
+      "A": [
+        "SAN DIEGO SHORES",
+        "RANCHO TSUNAMI",
+        "NEWPORT BEACH B",
+        "NORTH IRVINE",
+        "SOUTH COAST"
+      ],
+      "B": [
+        "908",
+        "SANTA BARBARA",
+        "LONG BEACH SHORE",
+        "LOS ALAMITOS",
+        "LA JOLLA UNITED"
+      ]
+    },
+    "finalPlacements": {
+      "908": 1,
+      "LA JOLLA UNITED": 10,
+      "LONG BEACH SHORE": 5,
+      "LOS ALAMITOS": 7,
+      "NEWPORT BEACH B": 6,
+      "NORTH IRVINE": 8,
+      "RANCHO TSUNAMI": 4,
+      "SAN DIEGO SHORES": 2,
+      "SANTA BARBARA": 3,
+      "SOUTH COAST": 9
+    },
+    "games": {
+      "12GD201": "SAN DIEGO SHORES | RANCHO TSUNAMI | final",
+      "12GD202": "NEWPORT BEACH B | SOUTH COAST | final",
+      "12GD203": "908 | LA JOLLA UNITED | final",
+      "12GD204": "SANTA BARBARA | LOS ALAMITOS | final",
+      "12GD205": "SAN DIEGO SHORES | NORTH IRVINE | final",
+      "12GD206": "SOUTH COAST | RANCHO TSUNAMI | final",
+      "12GD207": "SANTA BARBARA | LONG BEACH SHORE | final",
+      "12GD208": "LA JOLLA UNITED | LOS ALAMITOS | final",
+      "12GD209": "NEWPORT BEACH B | NORTH IRVINE | final",
+      "12GD210": "908 | LONG BEACH SHORE | final",
+      "12GD211": "RANCHO TSUNAMI | NORTH IRVINE | final",
+      "12GD212": "LOS ALAMITOS | LONG BEACH SHORE | final",
+      "12GD213": "SAN DIEGO SHORES | SOUTH COAST | final",
+      "12GD214": "NEWPORT BEACH B | RANCHO TSUNAMI | final",
+      "12GD215": "SANTA BARBARA | LA JOLLA UNITED | final",
+      "12GD216": "908 | LOS ALAMITOS | final",
+      "12GD217": "SOUTH COAST | NORTH IRVINE | final",
+      "12GD218": "LA JOLLA UNITED | LONG BEACH SHORE | final",
+      "12GD219": "SAN DIEGO SHORES | NEWPORT BEACH B | final",
+      "12GD220": "SANTA BARBARA | 908 | final",
+      "12GD221": "SAN DIEGO SHORES | SANTA BARBARA | final",
+      "12GD222": "908 | RANCHO TSUNAMI | final",
+      "12GD223": "SOUTH COAST | LA JOLLA UNITED | final",
+      "12GD224": "NORTH IRVINE | LOS ALAMITOS | final",
+      "12GD225": "NEWPORT BEACH B | LONG BEACH SHORE | final",
+      "12GD226": "SANTA BARBARA | RANCHO TSUNAMI | final",
+      "12GD227": "SAN DIEGO SHORES | 908 | final"
+    }
+  },
+  "14U_GIRLS_D1": {
+    "standings": {
+      "A": [
+        "908",
+        "GREENWICH",
+        "ARROYO GRANDE"
+      ],
+      "B": [
+        "LAMORINDA A",
+        "SANTA BARBARA",
+        "SAN DIEGO SHORES A"
+      ],
+      "C": [
+        "PATRIOT A",
+        "STANFORD A",
+        "SAN DIEGO DONS"
+      ],
+      "D": [
+        "SANTA CRUZ",
+        "COMMERCE",
+        "SAN CLEMENTE A"
+      ],
+      "E": [
+        "SHORE AQUATICS",
+        "CCU",
+        "TEMPLE CITY"
+      ],
+      "F": [
+        "CDM",
+        "LAGUNA BEACH",
+        "SAN JOSE EXPRESS"
+      ],
+      "G": [
+        "CDM",
+        "TEMPLE CITY",
+        "LAGUNA BEACH"
+      ],
+      "H": [
+        "CCU",
+        "SHORE AQUATICS",
+        "SAN JOSE EXPRESS"
+      ]
+    },
+    "finalPlacements": {
+      "908": 1,
+      "ARROYO GRANDE": null,
+      "CCU": 13,
+      "CDM": 14,
+      "COMMERCE": null,
+      "GREENWICH": null,
+      "LAGUNA BEACH": 17,
+      "LAMORINDA A": 3,
+      "PATRIOT A": 2,
+      "SAN CLEMENTE A": null,
+      "SAN DIEGO DONS": 7,
+      "SAN DIEGO SHORES A": 5,
+      "SAN JOSE EXPRESS": 18,
+      "SANTA BARBARA": 8,
+      "SANTA CRUZ": 4,
+      "SHORE AQUATICS": 15,
+      "STANFORD A": 6,
+      "TEMPLE CITY": 16
+    },
+    "games": {
+      "14GD101": "908 | GREENWICH | final",
+      "14GD102": "SANTA CRUZ | COMMERCE | final",
+      "14GD103": "LAMORINDA A | SAN DIEGO SHORES A | final",
+      "14GD104": "CCU | TEMPLE CITY | final",
+      "14GD105": "PATRIOT A | SAN DIEGO DONS | final",
+      "14GD106": "CDM | LAGUNA BEACH | final",
+      "14GD107": "ARROYO GRANDE | GREENWICH | final",
+      "14GD108": "SAN CLEMENTE A | COMMERCE | final",
+      "14GD109": "SANTA BARBARA | SAN DIEGO SHORES A | final",
+      "14GD110": "SHORE AQUATICS | TEMPLE CITY | final",
+      "14GD111": "STANFORD A | SAN DIEGO DONS | final",
+      "14GD112": "SAN JOSE EXPRESS | LAGUNA BEACH | final",
+      "14GD113": "908 | ARROYO GRANDE | final",
+      "14GD114": "SANTA CRUZ | SAN CLEMENTE A | final",
+      "14GD115": "LAMORINDA A | SANTA BARBARA | final",
+      "14GD116": "CCU | SHORE AQUATICS | final",
+      "14GD117": "PATRIOT A | STANFORD A | final",
+      "14GD118": "CDM | SAN JOSE EXPRESS | final",
+      "14GD119": "ARROYO GRANDE | CCU | final",
+      "14GD120": "SAN DIEGO SHORES A | LAGUNA BEACH | final",
+      "14GD121": "SAN CLEMENTE A | SHORE AQUATICS | final",
+      "14GD122": "SAN DIEGO DONS | CDM | final",
+      "14GD123": "SANTA BARBARA | ARROYO GRANDE | final",
+      "14GD124": "GREENWICH | SAN DIEGO SHORES A | final",
+      "14GD125": "STANFORD A | SAN CLEMENTE A | final",
+      "14GD126": "COMMERCE | SAN DIEGO DONS | final",
+      "14GD127": "SAN JOSE EXPRESS | SHORE AQUATICS | final",
+      "14GD128": "TEMPLE CITY | CDM | final",
+      "14GD129": "SANTA CRUZ | SANTA BARBARA | final",
+      "14GD130": "PATRIOT A | SAN DIEGO SHORES A | final",
+      "14GD131": "908 | STANFORD A | final",
+      "14GD132": "LAMORINDA A | SAN DIEGO DONS | final",
+      "14GD133": "ARROYO GRANDE | SAN CLEMENTE A | final",
+      "14GD134": "GREENWICH | COMMERCE | final",
+      "14GD135": "CCU | SHORE AQUATICS | final",
+      "14GD136": "LAGUNA BEACH | CDM | final",
+      "14GD137": "TEMPLE CITY | LAGUNA BEACH | final",
+      "14GD138": "SAN JOSE EXPRESS | CCU | final",
+      "14GD139": "SAN DIEGO DONS | SAN DIEGO SHORES A | final",
+      "14GD140": "STANFORD A | SANTA BARBARA | final",
+      "14GD141": "CDM | CCU | final",
+      "14GD142": "TEMPLE CITY | SHORE AQUATICS | final",
+      "14GD143": "LAGUNA BEACH | SAN JOSE EXPRESS | final",
+      "14GD144": "SAN DIEGO SHORES A | STANFORD A | final",
+      "14GD145": "SAN DIEGO DONS | SANTA BARBARA | final",
+      "14GD146": "908 | SANTA CRUZ | final",
+      "14GD147": "LAMORINDA A | PATRIOT A | final",
+      "14GD148": "LAMORINDA A | SANTA CRUZ | final",
+      "14GD149": "908 | PATRIOT A | final",
+      "14GD150": "SAN CLEMENTE A | GREENWICH | final",
+      "14GD151": "COMMERCE | ARROYO GRANDE | final"
+    }
+  },
+  "14U_GIRLS_D2": {
+    "standings": {
+      "A": [
+        "STANFORD B",
+        "LA PREMIER/PAC",
+        "AMERICAN RIVER"
+      ],
+      "C": [
+        "LA JOLLA UNITED",
+        "MAVERICKS",
+        "SAN CLEMENTE B"
+      ],
+      "G": [
+        "ASPHALT GREEN",
+        "AMERICAN RIVER",
+        "PATRIOT B"
+      ],
+      "H": [
+        "BIG VALLEY",
+        "NORCAL",
+        "LOS ALAMITOS"
+      ]
+    },
+    "finalPlacements": {
+      "AMERICAN RIVER": 11,
+      "ASPHALT GREEN": 9,
+      "BIG VALLEY": 10,
+      "FOOTHILL CLUB": 4,
+      "LA JOLLA UNITED": 6,
+      "LA PREMIER/PAC": 8,
+      "LOS ALAMITOS": 13,
+      "MAVERICKS": 1,
+      "NORCAL": 12,
+      "PATRIOT B": 14,
+      "ROSE BOWL": 5,
+      "SAN CLEMENTE B": 2,
+      "SAN DIEGO SHORES B": 3,
+      "STANFORD B": 7
+    },
+    "games": {
+      "14GD201": "STANFORD B | AMERICAN RIVER | final",
+      "14GD202": "MAVERICKS | LA JOLLA UNITED | final",
+      "14GD203": "ASPHALT GREEN | ROSE BOWL | final",
+      "14GD204": "PATRIOT B | FOOTHILL CLUB | final",
+      "14GD205": "NORCAL | LOS ALAMITOS | final",
+      "14GD206": "BIG VALLEY | SAN DIEGO SHORES B | final",
+      "14GD207": "LA PREMIER/PAC | AMERICAN RIVER | final",
+      "14GD208": "SAN CLEMENTE B | LA JOLLA UNITED | final",
+      "14GD209": "ASPHALT GREEN | NORCAL | final",
+      "14GD210": "PATRIOT B | BIG VALLEY | final",
+      "14GD211": "ROSE BOWL | LOS ALAMITOS | final",
+      "14GD212": "FOOTHILL CLUB | SAN DIEGO SHORES B | final",
+      "14GD213": "STANFORD B | LA PREMIER/PAC | final",
+      "14GD214": "MAVERICKS | SAN CLEMENTE B | final",
+      "14GD215": "FOOTHILL CLUB | AMERICAN RIVER | final",
+      "14GD216": "MAVERICKS | ASPHALT GREEN | final",
+      "14GD217": "LA PREMIER/PAC | BIG VALLEY | final",
+      "14GD218": "LOS ALAMITOS | SAN CLEMENTE B | final",
+      "14GD219": "AMERICAN RIVER | PATRIOT B | final",
+      "14GD220": "BIG VALLEY | NORCAL | final",
+      "14GD221": "ASPHALT GREEN | PATRIOT B | final",
+      "14GD222": "LOS ALAMITOS | NORCAL | final",
+      "14GD223": "AMERICAN RIVER | ASPHALT GREEN | final",
+      "14GD224": "BIG VALLEY | LOS ALAMITOS | final",
+      "14GD225": "STANFORD B | FOOTHILL CLUB | final",
+      "14GD226": "ROSE BOWL | MAVERICKS | final",
+      "14GD227": "SAN DIEGO SHORES B | LA PREMIER/PAC | final",
+      "14GD228": "LA JOLLA UNITED | SAN CLEMENTE B | final",
+      "14GD229": "STANFORD B | ROSE BOWL | final",
+      "14GD230": "LA PREMIER/PAC | LA JOLLA UNITED | final",
+      "14GD231": "FOOTHILL CLUB | MAVERICKS | final",
+      "14GD232": "SAN DIEGO SHORES B | SAN CLEMENTE B | final",
+      "14GD233": "PATRIOT B | LOS ALAMITOS | final",
+      "14GD234": "AMERICAN RIVER | NORCAL | final",
+      "14GD235": "ASPHALT GREEN | BIG VALLEY | final",
+      "14GD236": "STANFORD B | LA PREMIER/PAC | final",
+      "14GD237": "ROSE BOWL | LA JOLLA UNITED | final",
+      "14GD238": "FOOTHILL CLUB | SAN DIEGO SHORES B | final",
+      "14GD239": "MAVERICKS | SAN CLEMENTE B | final"
+    }
+  },
+  "16U_GIRLS_D1": {
+    "standings": {
+      "A": [
+        "SANTA BARBARA",
+        "STANFORD",
+        "680"
+      ],
+      "B": [
+        "MISSION",
+        "REGENCY",
+        "LAMORINDA A"
+      ],
+      "C": [
+        "SANTA CRUZ",
+        "NEWPORT BEACH",
+        "GREENWICH"
+      ],
+      "D": [
+        "PATRIOT",
+        "SHAQ",
+        "LEGACY"
+      ],
+      "E": [
+        "MERIDIAN",
+        "SAN DIEGO SHORES",
+        "NORCO"
+      ],
+      "F": [
+        "RANCHO TSUNAMI",
+        "CLOVIS",
+        "ASPHALT GREEN"
+      ],
+      "G": [
+        "SOUTH COAST",
+        "ARROYO GRANDE",
+        "LAMORINDA B"
+      ],
+      "H": [
+        "DIABLO ALLIANCE",
+        "CLUB DAYGO",
+        "CIU"
+      ],
+      "K": [
+        "SAN DIEGO SHORES",
+        "CLUB DAYGO",
+        "ARROYO GRANDE",
+        "CLOVIS"
+      ],
+      "M": [
+        "NORCO",
+        "ASPHALT GREEN",
+        "CIU",
+        "LAMORINDA B"
+      ]
+    },
+    "finalPlacements": {
+      "680": 14,
+      "ARROYO GRANDE": 19,
+      "ASPHALT GREEN": 22,
+      "CIU": 23,
+      "CLOVIS": 20,
+      "CLUB DAYGO": 18,
+      "DIABLO ALLIANCE": 10,
+      "GREENWICH": 13,
+      "LAMORINDA A": 15,
+      "LAMORINDA B": 24,
+      "LEGACY": 16,
+      "MERIDIAN": 7,
+      "MISSION": 2,
+      "NEWPORT BEACH": 11,
+      "NORCO": 21,
+      "PATRIOT": 6,
+      "RANCHO TSUNAMI": 12,
+      "REGENCY": 4,
+      "SAN DIEGO SHORES": 17,
+      "SANTA BARBARA": 1,
+      "SANTA CRUZ": 5,
+      "SHAQ": 8,
+      "SOUTH COAST": 9,
+      "STANFORD": 3
+    },
+    "games": {
+      "16GD101": "STANFORD | 680 | final",
+      "16GD102": "MERIDIAN | NORCO | final",
+      "16GD103": "LEGACY | PATRIOT | final",
+      "16GD104": "CLUB DAYGO | CIU | final",
+      "16GD105": "MISSION | REGENCY | final",
+      "16GD106": "RANCHO TSUNAMI | ASPHALT GREEN | final",
+      "16GD107": "SANTA CRUZ | GREENWICH | final",
+      "16GD108": "ARROYO GRANDE | LAMORINDA B | final",
+      "16GD109": "SANTA BARBARA | 680 | final",
+      "16GD110": "SAN DIEGO SHORES | NORCO | final",
+      "16GD111": "SHAQ | PATRIOT | final",
+      "16GD112": "DIABLO ALLIANCE | CIU | final",
+      "16GD113": "MISSION | LAMORINDA A | final",
+      "16GD114": "CLOVIS | ASPHALT GREEN | final",
+      "16GD115": "NEWPORT BEACH | GREENWICH | final",
+      "16GD116": "SOUTH COAST | LAMORINDA B | final",
+      "16GD117": "STANFORD | SANTA BARBARA | final",
+      "16GD118": "MERIDIAN | SAN DIEGO SHORES | final",
+      "16GD119": "LEGACY | SHAQ | final",
+      "16GD120": "CLUB DAYGO | DIABLO ALLIANCE | final",
+      "16GD121": "LAMORINDA A | REGENCY | final",
+      "16GD122": "RANCHO TSUNAMI | CLOVIS | final",
+      "16GD123": "SANTA CRUZ | NEWPORT BEACH | final",
+      "16GD124": "ARROYO GRANDE | SOUTH COAST | final",
+      "16GD125": "680 | DIABLO ALLIANCE | final",
+      "16GD126": "SAN DIEGO SHORES | CLUB DAYGO | final",
+      "16GD127": "LEGACY | MERIDIAN | final",
+      "16GD128": "CLOVIS | ARROYO GRANDE | final",
+      "16GD129": "LAMORINDA A | SOUTH COAST | final",
+      "16GD130": "NORCO | CIU | final",
+      "16GD131": "GREENWICH | RANCHO TSUNAMI | final",
+      "16GD132": "ASPHALT GREEN | LAMORINDA B | final",
+      "16GD133": "REGENCY | DIABLO ALLIANCE | final",
+      "16GD134": "SAN DIEGO SHORES | ARROYO GRANDE | final",
+      "16GD135": "NEWPORT BEACH | MERIDIAN | final",
+      "16GD136": "CLOVIS | CLUB DAYGO | final",
+      "16GD137": "STANFORD | SOUTH COAST | final",
+      "16GD138": "NORCO | LAMORINDA B | final",
+      "16GD139": "SHAQ | RANCHO TSUNAMI | final",
+      "16GD140": "ASPHALT GREEN | CIU | final",
+      "16GD141": "PATRIOT | REGENCY | final",
+      "16GD142": "680 | LEGACY | final",
+      "16GD143": "SANTA BARBARA | MERIDIAN | final",
+      "16GD144": "LAMORINDA A | GREENWICH | final",
+      "16GD145": "SANTA CRUZ | STANFORD | final",
+      "16GD146": "MISSION | SHAQ | final",
+      "16GD147": "SANTA BARBARA | REGENCY | final",
+      "16GD148": "LAMORINDA B | CIU | final",
+      "16GD149": "DIABLO ALLIANCE | NEWPORT BEACH | final",
+      "16GD150": "MISSION | STANFORD | final",
+      "16GD151": "680 | GREENWICH | final",
+      "16GD152": "SOUTH COAST | RANCHO TSUNAMI | final",
+      "16GD153": "LAMORINDA A | LEGACY | final",
+      "16GD154": "SHAQ | SANTA CRUZ | final",
+      "16GD155": "SAN DIEGO SHORES | CLOVIS | final",
+      "16GD156": "MERIDIAN | PATRIOT | final",
+      "16GD157": "REGENCY | STANFORD | final",
+      "16GD158": "ARROYO GRANDE | CLUB DAYGO | final",
+      "16GD159": "DIABLO ALLIANCE | SOUTH COAST | final",
+      "16GD160": "SANTA BARBARA | MISSION | final",
+      "16GD161": "NORCO | ASPHALT GREEN | final",
+      "16GD162": "NEWPORT BEACH | RANCHO TSUNAMI | final",
+      "16GD163": "SANTA CRUZ | PATRIOT | final",
+      "16GD164": "MERIDIAN | SHAQ | final"
+    }
+  },
+  "16U_GIRLS_D2": {
+    "standings": {
+      "A": [
+        "SAN CLEMENTE",
+        "SAN JOSE EXPRESS",
+        "ROSE BOWL"
+      ],
+      "B": [
+        "OVAC",
+        "TEMPLE CITY",
+        "AMERICAN RIVER"
+      ],
+      "C": [
+        "OLYMPUS",
+        "BULLDOG",
+        "SOUTH VALLEY UNITED"
+      ],
+      "D": [
+        "LB VIKING A",
+        "CDM",
+        "VIPER PIGEON"
+      ],
+      "G": [
+        "SAN CLEMENTE",
+        "LB VIKING A",
+        "SOCAL"
+      ],
+      "H": [
+        "LA JOLLA UNITED A",
+        "OVAC",
+        "OLYMPUS"
+      ],
+      "J": [
+        "SAN JOSE EXPRESS",
+        "CDM",
+        "NORCAL"
+      ],
+      "K": [
+        "TEMPLE CITY",
+        "BULLDOG",
+        "STANFORD B"
+      ]
+    },
+    "finalPlacements": {
+      "AMERICAN RIVER": 14,
+      "BULLDOG": 9,
+      "CDM": 10,
+      "LA JOLLA UNITED A": 2,
+      "LA JOLLA UNITED B": 18,
+      "LB VIKING A": 3,
+      "LB VIKING B": 16,
+      "MAVERICKS": 17,
+      "NORCAL": 11,
+      "OLYMPUS": 6,
+      "OVAC": 4,
+      "ROSE BOWL": 13,
+      "SAN CLEMENTE": 1,
+      "SAN JOSE EXPRESS": 7,
+      "SOCAL": 5,
+      "SOUTH VALLEY UNITED": 20,
+      "STANFORD B": 12,
+      "TEMPLE CITY": 8,
+      "VIPER PIGEON": 15,
+      "VIPER PIGEONS HC": 19
+    },
+    "games": {
+      "16GD201": "SAN JOSE EXPRESS | ROSE BOWL | final",
+      "16GD202": "TEMPLE CITY | OVAC | final",
+      "16GD203": "LB VIKING A | CDM | final",
+      "16GD204": "BULLDOG | SOUTH VALLEY UNITED | final",
+      "16GD205": "LA JOLLA UNITED A | LB VIKING B | final",
+      "16GD206": "NORCAL | LA JOLLA UNITED B | final",
+      "16GD207": "STANFORD B | VIPER PIGEONS HC | final",
+      "16GD208": "SOCAL | MAVERICKS | final",
+      "16GD209": "SAN CLEMENTE | ROSE BOWL | final",
+      "16GD210": "AMERICAN RIVER | OVAC | final",
+      "16GD211": "VIPER PIGEON | CDM | final",
+      "16GD212": "OLYMPUS | SOUTH VALLEY UNITED | final",
+      "16GD213": "LB VIKING B | VIPER PIGEONS HC | final",
+      "16GD214": "LA JOLLA UNITED B | MAVERICKS | final",
+      "16GD215": "LA JOLLA UNITED A | STANFORD B | final",
+      "16GD216": "NORCAL | SOCAL | final",
+      "16GD217": "SAN JOSE EXPRESS | SAN CLEMENTE | final",
+      "16GD218": "TEMPLE CITY | AMERICAN RIVER | final",
+      "16GD219": "LB VIKING A | VIPER PIGEON | final",
+      "16GD220": "BULLDOG | OLYMPUS | final",
+      "16GD221": "SAN JOSE EXPRESS | NORCAL | final",
+      "16GD222": "TEMPLE CITY | STANFORD B | final",
+      "16GD223": "SAN CLEMENTE | SOCAL | final",
+      "16GD224": "ROSE BOWL | VIPER PIGEONS HC | final",
+      "16GD225": "OVAC | LA JOLLA UNITED A | final",
+      "16GD226": "VIPER PIGEON | MAVERICKS | final",
+      "16GD227": "CDM | NORCAL | final",
+      "16GD228": "BULLDOG | STANFORD B | final",
+      "16GD229": "LB VIKING A | SOCAL | final",
+      "16GD230": "AMERICAN RIVER | LA JOLLA UNITED B | final",
+      "16GD231": "OLYMPUS | LA JOLLA UNITED A | final",
+      "16GD232": "SOUTH VALLEY UNITED | LB VIKING B | final",
+      "16GD233": "SAN JOSE EXPRESS | CDM | final",
+      "16GD234": "TEMPLE CITY | BULLDOG | final",
+      "16GD235": "SAN CLEMENTE | LB VIKING A | final",
+      "16GD236": "VIPER PIGEONS HC | MAVERICKS | final",
+      "16GD237": "OVAC | OLYMPUS | final",
+      "16GD238": "ROSE BOWL | VIPER PIGEON | final",
+      "16GD239": "LA JOLLA UNITED B | SOUTH VALLEY UNITED | final",
+      "16GD240": "AMERICAN RIVER | LB VIKING B | final",
+      "16GD241": "STANFORD B | NORCAL | final",
+      "16GD242": "CDM | BULLDOG | final",
+      "16GD243": "TEMPLE CITY | SAN JOSE EXPRESS | final",
+      "16GD244": "SOCAL | OLYMPUS | final",
+      "16GD245": "ROSE BOWL | AMERICAN RIVER | final",
+      "16GD246": "LB VIKING B | VIPER PIGEON | final",
+      "16GD247": "MAVERICKS | LA JOLLA UNITED B | final",
+      "16GD248": "VIPER PIGEONS HC | SOUTH VALLEY UNITED | final",
+      "16GD249": "OVAC | LB VIKING A | final",
+      "16GD250": "SAN CLEMENTE | LA JOLLA UNITED A | final"
+    }
+  },
+  "18U_GIRLS_D1": {
+    "standings": {
+      "A": [
+        "SANTA BARBARA A",
+        "LB VIKING A",
+        "STANFORD"
+      ],
+      "B": [
+        "REGENCY",
+        "DIABLO ALLIANCE",
+        "LEGACY"
+      ],
+      "C": [
+        "LAMORINDA",
+        "SAN DIEGO SHORES",
+        "680"
+      ],
+      "D": [
+        "NEWPORT BEACH",
+        "CLOVIS",
+        "LA JOLLA UNITED A"
+      ],
+      "E": [
+        "SANTA BARBARA B",
+        "CDM",
+        "SANTA CRUZ"
+      ],
+      "F": [
+        "ROSE BOWL",
+        "SAN CLEMENTE",
+        "ASPHALT GREEN"
+      ],
+      "G": [
+        "MISSION",
+        "OVAC",
+        "BULLDOG"
+      ],
+      "H": [
+        "SOCAL",
+        "SEASIDE",
+        "THUNDER"
+      ],
+      "K": [
+        "CDM",
+        "OVAC",
+        "SEASIDE",
+        "SAN CLEMENTE"
+      ],
+      "M": [
+        "SANTA CRUZ",
+        "BULLDOG",
+        "ASPHALT GREEN",
+        "THUNDER"
+      ]
+    },
+    "finalPlacements": {
+      "680": 13,
+      "ASPHALT GREEN": 23,
+      "BULLDOG": 22,
+      "CDM": 17,
+      "CLOVIS": 12,
+      "DIABLO ALLIANCE": 9,
+      "LA JOLLA UNITED A": 15,
+      "LAMORINDA": 4,
+      "LB VIKING A": 10,
+      "LEGACY": 6,
+      "MISSION": 16,
+      "NEWPORT BEACH": 3,
+      "OVAC": 18,
+      "REGENCY": 2,
+      "ROSE BOWL": 8,
+      "SAN CLEMENTE": 20,
+      "SAN DIEGO SHORES": 7,
+      "SANTA BARBARA A": 1,
+      "SANTA BARBARA B": 11,
+      "SANTA CRUZ": 21,
+      "SEASIDE": 19,
+      "SOCAL": 5,
+      "STANFORD": 14,
+      "THUNDER": 24
+    },
+    "games": {
+      "18GD101": "REGENCY | LEGACY | final",
+      "18GD102": "MISSION | OVAC | final",
+      "18GD103": "SAN DIEGO SHORES | 680 | final",
+      "18GD104": "SANTA CRUZ | SANTA BARBARA B | final",
+      "18GD105": "CLOVIS | LA JOLLA UNITED A | final",
+      "18GD106": "SOCAL | SEASIDE | final",
+      "18GD107": "SANTA BARBARA A | LB VIKING A | final",
+      "18GD108": "ROSE BOWL | SAN CLEMENTE | final",
+      "18GD109": "DIABLO ALLIANCE | LEGACY | final",
+      "18GD110": "BULLDOG | MISSION | final",
+      "18GD111": "LAMORINDA | 680 | final",
+      "18GD112": "SANTA BARBARA B | CDM | final",
+      "18GD113": "NEWPORT BEACH | LA JOLLA UNITED A | final",
+      "18GD114": "THUNDER | SEASIDE | final",
+      "18GD115": "STANFORD | LB VIKING A | final",
+      "18GD116": "ASPHALT GREEN | SAN CLEMENTE | final",
+      "18GD117": "DIABLO ALLIANCE | REGENCY | final",
+      "18GD118": "BULLDOG | OVAC | final",
+      "18GD119": "SAN DIEGO SHORES | LAMORINDA | final",
+      "18GD120": "SANTA CRUZ | CDM | final",
+      "18GD121": "CLOVIS | NEWPORT BEACH | final",
+      "18GD122": "SOCAL | THUNDER | final",
+      "18GD123": "SANTA BARBARA A | STANFORD | final",
+      "18GD124": "ROSE BOWL | ASPHALT GREEN | final",
+      "18GD125": "STANFORD | SOCAL | final",
+      "18GD126": "CDM | SEASIDE | final",
+      "18GD127": "LA JOLLA UNITED A | SANTA BARBARA B | final",
+      "18GD128": "SAN CLEMENTE | OVAC | final",
+      "18GD129": "LEGACY | MISSION | final",
+      "18GD130": "SANTA CRUZ | THUNDER | final",
+      "18GD131": "680 | ROSE BOWL | final",
+      "18GD132": "ASPHALT GREEN | BULLDOG | final",
+      "18GD133": "DIABLO ALLIANCE | SOCAL | final",
+      "18GD134": "CDM | OVAC | final",
+      "18GD135": "SAN DIEGO SHORES | SANTA BARBARA B | final",
+      "18GD136": "SAN CLEMENTE | SEASIDE | final",
+      "18GD137": "LB VIKING A | LEGACY | final",
+      "18GD138": "SANTA CRUZ | BULLDOG | final",
+      "18GD139": "CLOVIS | ROSE BOWL | final",
+      "18GD140": "ASPHALT GREEN | THUNDER | final",
+      "18GD141": "NEWPORT BEACH | SOCAL | final",
+      "18GD142": "STANFORD | LA JOLLA UNITED A | final",
+      "18GD143": "SANTA BARBARA A | SAN DIEGO SHORES | final",
+      "18GD144": "MISSION | 680 | final",
+      "18GD145": "LAMORINDA | LEGACY | final",
+      "18GD146": "REGENCY | ROSE BOWL | final",
+      "18GD147": "SANTA BARBARA A | NEWPORT BEACH | final",
+      "18GD148": "BULLDOG | THUNDER | final",
+      "18GD149": "DIABLO ALLIANCE | SANTA BARBARA B | final",
+      "18GD150": "REGENCY | LAMORINDA | final",
+      "18GD151": "STANFORD | 680 | final",
+      "18GD152": "LB VIKING A | CLOVIS | final",
+      "18GD153": "MISSION | LA JOLLA UNITED A | final",
+      "18GD154": "ROSE BOWL | LEGACY | final",
+      "18GD155": "CDM | SAN CLEMENTE | final",
+      "18GD156": "SAN DIEGO SHORES | SOCAL | final",
+      "18GD157": "NEWPORT BEACH | LAMORINDA | final",
+      "18GD158": "OVAC | SEASIDE | final",
+      "18GD159": "DIABLO ALLIANCE | LB VIKING A | final",
+      "18GD160": "SANTA BARBARA A | REGENCY | final",
+      "18GD161": "SANTA CRUZ | ASPHALT GREEN | final",
+      "18GD162": "SANTA BARBARA B | CLOVIS | final",
+      "18GD163": "LEGACY | SOCAL | final",
+      "18GD164": "SAN DIEGO SHORES | ROSE BOWL | final"
+    }
+  },
+  "18U_GIRLS_D2": {
+    "standings": {
+      "A": [
+        "SKIP",
+        "COLORADO UNITED",
+        "NORTH IRVINE"
+      ],
+      "B": [
+        "RANCHO TSUNAMI",
+        "LA JOLLA UNITED B",
+        "AMERICAN RIVER"
+      ],
+      "C": [
+        "DAVIS",
+        "PATRIOT",
+        "LONGHORN"
+      ],
+      "D": [
+        "FOOTHILL CLUB",
+        "NORCAL",
+        "SACRAMENTO"
+      ],
+      "E": [
+        "LB VIKING B",
+        "SHAQ",
+        "HYDRA"
+      ],
+      "F": [
+        "SOUTH COAST",
+        "BIG VALLEY",
+        "SAND CANYON"
+      ],
+      "G": [
+        "FOOTHILL CLUB",
+        "SKIP",
+        "LB VIKING B"
+      ],
+      "H": [
+        "RANCHO TSUNAMI",
+        "DAVIS",
+        "SOUTH COAST"
+      ],
+      "J": [
+        "COLORADO UNITED",
+        "SHAQ",
+        "NORCAL"
+      ],
+      "K": [
+        "BIG VALLEY",
+        "PATRIOT",
+        "LA JOLLA UNITED B"
+      ],
+      "L": [
+        "SACRAMENTO",
+        "HYDRA",
+        "NORTH IRVINE"
+      ],
+      "M": [
+        "AMERICAN RIVER",
+        "LONGHORN",
+        "SAND CANYON"
+      ]
+    },
+    "finalPlacements": {
+      "AMERICAN RIVER": 14,
+      "BIG VALLEY": 8,
+      "COLORADO UNITED": 7,
+      "DAVIS": 3,
+      "FOOTHILL CLUB": 1,
+      "HYDRA": 16,
+      "LA JOLLA UNITED B": 12,
+      "LB VIKING B": 5,
+      "LONGHORN": 15,
+      "NORCAL": 11,
+      "NORTH IRVINE": 17,
+      "PATRIOT": 10,
+      "RANCHO TSUNAMI": 2,
+      "SACRAMENTO": 13,
+      "SAND CANYON": 18,
+      "SHAQ": 9,
+      "SKIP": 4,
+      "SOUTH COAST": 6
+    },
+    "games": {
+      "18GD201": "SKIP | NORTH IRVINE | final",
+      "18GD202": "FOOTHILL CLUB | SACRAMENTO | final",
+      "18GD203": "SHAQ | HYDRA | final",
+      "18GD204": "COLORADO UNITED | NORTH IRVINE | final",
+      "18GD205": "NORCAL | SACRAMENTO | final",
+      "18GD206": "LB VIKING B | HYDRA | final",
+      "18GD207": "SKIP | COLORADO UNITED | final",
+      "18GD208": "FOOTHILL CLUB | NORCAL | final",
+      "18GD209": "SHAQ | LB VIKING B | final",
+      "18GD210": "RANCHO TSUNAMI | LA JOLLA UNITED B | final",
+      "18GD211": "DAVIS | LONGHORN | final",
+      "18GD212": "SOUTH COAST | SAND CANYON | final",
+      "18GD213": "AMERICAN RIVER | LA JOLLA UNITED B | final",
+      "18GD214": "PATRIOT | LONGHORN | final",
+      "18GD215": "BIG VALLEY | SAND CANYON | final",
+      "18GD216": "RANCHO TSUNAMI | AMERICAN RIVER | final",
+      "18GD217": "DAVIS | PATRIOT | final",
+      "18GD218": "SOUTH COAST | BIG VALLEY | final",
+      "18GD219": "SKIP | LB VIKING B | final",
+      "18GD220": "COLORADO UNITED | SHAQ | final",
+      "18GD221": "RANCHO TSUNAMI | SOUTH COAST | final",
+      "18GD222": "LA JOLLA UNITED B | BIG VALLEY | final",
+      "18GD223": "NORTH IRVINE | HYDRA | final",
+      "18GD224": "AMERICAN RIVER | SAND CANYON | final",
+      "18GD225": "FOOTHILL CLUB | LB VIKING B | final",
+      "18GD226": "NORCAL | SHAQ | final",
+      "18GD227": "DAVIS | SOUTH COAST | final",
+      "18GD228": "PATRIOT | BIG VALLEY | final",
+      "18GD229": "SACRAMENTO | HYDRA | final",
+      "18GD230": "LONGHORN | SAND CANYON | final",
+      "18GD231": "SKIP | FOOTHILL CLUB | final",
+      "18GD232": "COLORADO UNITED | NORCAL | final",
+      "18GD233": "RANCHO TSUNAMI | DAVIS | final",
+      "18GD234": "LA JOLLA UNITED B | PATRIOT | final",
+      "18GD235": "NORTH IRVINE | SACRAMENTO | final",
+      "18GD236": "AMERICAN RIVER | LONGHORN | final",
+      "18GD237": "SKIP | DAVIS | final",
+      "18GD238": "FOOTHILL CLUB | RANCHO TSUNAMI | final",
+      "18GD239": "LB VIKING B | SOUTH COAST | final",
+      "18GD240": "COLORADO UNITED | BIG VALLEY | final",
+      "18GD241": "SHAQ | PATRIOT | final",
+      "18GD242": "NORCAL | LA JOLLA UNITED B | final",
+      "18GD243": "SACRAMENTO | AMERICAN RIVER | final",
+      "18GD244": "HYDRA | LONGHORN | final",
+      "18GD245": "NORTH IRVINE | SAND CANYON | final"
+    }
+  }
+}

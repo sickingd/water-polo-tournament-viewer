@@ -3,6 +3,8 @@
   "private": true,
   "description": "Run `npm install` once, then `npm run deploy` to publish both the static site and the live-data Worker to Cloudflare.",
   "scripts": {
+    "test": "node tools/run_tests.js",
+    "test:golden:update": "node tools/test_golden.js --update",
     "deploy:site": "wrangler deploy",
     "deploy:worker": "wrangler deploy --config worker/wrangler.toml",
     "deploy": "npm run deploy:site && npm run deploy:worker"

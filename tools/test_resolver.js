@@ -289,5 +289,124 @@ const semiPairScenario = global.Resolver.buildScenarios(semiPairResult.ctx, 'TEA
 assertEqual(semiPairScenario.ceiling, 9, 'Semi-pair-ordinal test: ceiling still correctly bounds at 9 (best case)');
 assertEqual(semiPairScenario.floor, 12, 'Semi-pair-ordinal test: floor still correctly bounds at 12 (worst case)');
 
+// ===========================================================================================
+// Token-grammar & forward-reference coverage -- each token type and each "what comes next"
+// relay mechanism, in isolation. The scenario/standings tests above exercise these indirectly;
+// these pin each one down on its own so a regression names the exact mechanism that broke.
+// ===========================================================================================
+
+// progressPair (W#{LET}{a}/{b}): a placement semifinal is referenced downstream by its two
+// seeded entrants' positions, not a game number. Winner of (B1 vs B4) feeds the next round.
+const progressPairGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'PP1', white: 'B1(1stA)-ALPHA', white_score: 10, dark: 'B4(1stD)-DELTA', dark_score: 5, round: 'semi', division: 'PP', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'PP2', white: 'W#B1/B4', white_score: null, dark: 'TBD', dark_score: null, round: 'final', division: 'PP', played: false },
+];
+assertEqual(global.Resolver.resolveDivision(progressPairGames).games.find((g) => g.game_id === 'PP2').whiteTeam, 'ALPHA', 'progressPair: "W#B1/B4" resolves to the winner of the B1-vs-B4 semifinal');
+
+// finishPair (W#{ord1}{let1}/{ord2}{let2}): a cross-group placement game referenced by the two
+// group finishes it pits against each other (bare digit+letter, no ordinal suffix).
+const finishPairGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'FP1', white: '1stE-EWIN', white_score: 10, dark: '2ndF-FRUN', dark_score: 5, round: 'cross', division: 'FP', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'FP2', white: 'W#1E/2F', white_score: null, dark: 'TBD', dark_score: null, round: 'final', division: 'FP', played: false },
+];
+assertEqual(global.Resolver.resolveDivision(finishPairGames).games.find((g) => g.game_id === 'FP2').whiteTeam, 'EWIN', 'finishPair: "W#1E/2F" resolves to the winner of the 1stE-vs-2ndF cross game');
+
+// "1/2 X" / "3/4 X" semifinal-label relay: a 4-team mini-bracket's cross game carries the LET
+// only in its round label (its own tokens are W#/L# refs into the semis), and the winner is
+// referenced downstream as "1stX". The forward walk must derive that from the label.
+const semiLabelGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: '99XD113', white: 'X1-A', white_score: 10, dark: 'X4-D', dark_score: 5, round: 'semi', division: 'SEMILBL', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: '99XD114', white: 'X2-B', white_score: 9, dark: 'X3-C', dark_score: 4, round: 'semi', division: 'SEMILBL', played: true },
+  { date: 'd', time: '10:00 AM', location: 'X', game_id: '99XD120', white: 'W#13', white_score: null, dark: 'W#14', dark_score: null, round: '1/2 X', division: 'SEMILBL', played: false },
+  { date: 'd', time: '11:00 AM', location: 'X', game_id: '99XD121', white: 'AA1(1stX)-', white_score: null, dark: 'AA2(2ndZ)-Z', dark_score: null, round: 'AA bracket', division: 'SEMILBL', played: false },
+];
+const semiLabelAll = global.Resolver.buildAllPossibleGames(global.Resolver.resolveDivision(semiLabelGames).ctx, 'A');
+assertEqual(semiLabelAll.length, 2, '"1/2 X" relay: A\'s tree is the "1/2 X" final plus its win-branch');
+assertEqual(semiLabelAll[1] && semiLabelAll[1].gameId, '99XD121', '"1/2 X" relay: winning the final relays forward via "1stX" into the AA bracket');
+
+// "1st/2ndH" / "3rd/4thD" relative-label relay: same mechanism, different spelling (ordinal/
+// ordinal + letter, no space). The LET and both ords live only in the round label text.
+const relLabelGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'R13', white: 'H1(1stA)-A', white_score: 10, dark: 'H4(1stD)-D', dark_score: 5, round: 'semi', division: 'RELLBL', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'R14', white: 'H2(1stB)-B', white_score: 9, dark: 'H3(1stC)-C', dark_score: 4, round: 'semi', division: 'RELLBL', played: true },
+  { date: 'd', time: '10:00 AM', location: 'X', game_id: 'R20', white: 'W#H1/H4', white_score: null, dark: 'W#H2/H3', dark_score: null, round: '1st/2ndH', division: 'RELLBL', played: false },
+  { date: 'd', time: '11:00 AM', location: 'X', game_id: 'R21', white: 'AA1(1stH)-', white_score: null, dark: 'TEAMZ', dark_score: null, round: 'AA bracket', division: 'RELLBL', played: false },
+];
+const relLabelAll = global.Resolver.buildAllPossibleGames(global.Resolver.resolveDivision(relLabelGames).ctx, 'A');
+assertEqual(relLabelAll.length, 2, '"1st/2ndH" relay: A\'s tree is the "1st/2ndH" final plus its win-branch');
+assertEqual(relLabelAll[1] && relLabelAll[1].gameId, 'R21', '"1st/2ndH" relay: winning relays forward via "1stH" into the AA bracket');
+
+// terminalPlace explicit "N-M w/l" form: each game sharing the outer bound decides a distinct,
+// non-adjacent pair ("9-16 9/13" -> winner 9th, loser 13th), not the simple "Nth"/"Nth+1" shape.
+const explicitPlaceGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'EP1', white: 'A1-AA', white_score: null, dark: 'A2-BB', dark_score: null, round: '9-16 9/13', division: 'EP', played: false },
+];
+const explicitScenario = global.Resolver.buildScenarios(global.Resolver.resolveDivision(explicitPlaceGames).ctx, 'AA', 16);
+assertEqual(explicitScenario.ceiling, 9, 'terminalPlace explicit: "9-16 9/13" win = 9th (ceiling)');
+assertEqual(explicitScenario.floor, 13, 'terminalPlace explicit: "9-16 9/13" lose = 13th (floor)');
+
+// clinchedRanks before the group is complete: a 3-team pool's leader who has won both their
+// games can't be caught, so "1stX" resolves to them even with the other pairing still pending.
+const clinchGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'CL1', white: 'X1-LEADER', white_score: 10, dark: 'X2-MID', dark_score: 5, round: 'X bracket', division: 'CLINCH', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'CL2', white: 'X1-LEADER', white_score: 11, dark: 'X3-LOW', dark_score: 3, round: 'X bracket', division: 'CLINCH', played: true },
+  { date: 'd', time: '10:00 AM', location: 'X', game_id: 'CL3', white: 'X2-MID', dark: 'X3-LOW', white_score: null, dark_score: null, round: 'X bracket', division: 'CLINCH', played: false },
+  { date: 'd', time: '11:00 AM', location: 'X', game_id: 'CL4', white: 'Y1(1stX)-', white_score: null, dark: 'TEAMZ', dark_score: null, round: 'Y bracket', division: 'CLINCH', played: false },
+];
+const clinchResult = global.Resolver.resolveDivision(clinchGames);
+assertEqual(clinchResult.standings['X'].complete, false, 'clinched: group X is genuinely still incomplete (one pairing unplayed)');
+assertEqual(clinchResult.games.find((g) => g.game_id === 'CL4').whiteTeam, 'LEADER', 'clinched: "1stX" resolves to the already-clinched leader before the group finishes');
+
+// inferUnlabeledTerminalRange: an unlabeled bottom-band pool ("G bracket", no numeric range,
+// nothing referencing its finish) is the leftover placement band -- a team in it must get that
+// band's full range (3rd-5th here), never a falsely-narrow single locked place. This is the
+// 12U Girls "every team showing locked 11th" shape, minimized.
+const inferGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'IU1', white: 'A1-AONE', white_score: 10, dark: 'A2-ATWO', dark_score: 5, round: '1-2 RR', division: 'INFER', played: true },
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'IU2', white: 'G1-GONE', white_score: 10, dark: 'G2-GTWO', dark_score: 5, round: 'G bracket', division: 'INFER', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'IU3', white: 'G1-GONE', white_score: 8, dark: 'G3-GTHREE', dark_score: 9, round: 'G bracket', division: 'INFER', played: true },
+  { date: 'd', time: '10:00 AM', location: 'X', game_id: 'IU4', white: 'G2-GTWO', white_score: null, dark: 'G3-GTHREE', dark_score: null, round: 'G bracket', division: 'INFER', played: false },
+];
+const inferScenario = global.Resolver.buildScenarios(global.Resolver.resolveDivision(inferGames).ctx, 'GONE', 5);
+assertEqual(inferScenario.ceiling, 3, 'infer-unlabeled: GONE\'s ceiling is 3rd (top of the leftover 3rd-5th band), not a locked single place');
+assertEqual(inferScenario.floor, 5, 'infer-unlabeled: GONE\'s floor is 5th (bottom of the leftover band)');
+
+// splitToken tolerates a stray symbol after a closing paren ("K8(2ndA)(16)]-MID PEN", an extra
+// "]") -- it must still parse as a SEED (head "K8", source "2ndA", team "MID PEN"), never fall
+// through to a literal team named after the whole garbled blob.
+const strayTok = global.Resolver.parseToken('K8(2ndA)(16)]-MID PEN');
+assertEqual(strayTok.type, 'seed', 'splitToken stray-bracket: parses as a seed, not a literal team');
+assertEqual(strayTok.team, 'MID PEN', 'splitToken stray-bracket: cached team extracted past the stray "]"');
+assertEqual(strayTok.sources.length === 1 && strayTok.sources[0].let, 'A', 'splitToken stray-bracket: real source "2ndA" kept; bare-numeric "(16)" filtered out');
+
+// A trailing bare-numeric paren ("J8(1stH)(8)") is a human seed-number annotation, not a ref --
+// it must be filtered so it can't become a bogus always-locked team named "8" that pre-empts
+// the real (1stH) source.
+const bareNumTok = global.Resolver.parseToken('J8(1stH)(8)-SOMETEAM');
+assertEqual(bareNumTok.sources.length, 1, 'bare-numeric paren: only the real "(1stH)" source kept, "(8)" dropped');
+assertEqual(bareNumTok.sources[0].type === 'finish' && bareNumTok.sources[0].ord, 1, 'bare-numeric paren: the kept source is the "1stH" finish ref');
+
+// Cross-group mix-up repair: a "(2ndB)" seed cached a real team ("DALLIANCE") that structurally
+// only ever plays in Group D -- it cannot be Group B's runner-up, so the live-computed Group B
+// runner-up wins over the impossible cache.
+const mixupGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'MX1', white: 'B1-BWIN', white_score: 10, dark: 'B2-BRUN', dark_score: 3, round: 'B bracket', division: 'MIXUP', played: true },
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'MX2', white: 'D1-DALLIANCE', white_score: 10, dark: 'D2-DOTHER', dark_score: 3, round: 'D bracket', division: 'MIXUP', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'MX3', white: 'K1(2ndB)-DALLIANCE', white_score: null, dark: 'TEAMZ', dark_score: null, round: 'K bracket', division: 'MIXUP', played: false },
+];
+assertEqual(global.Resolver.resolveDivision(mixupGames).games.find((g) => g.game_id === 'MX3').whiteTeam, 'BRUN', 'cross-group mix-up: "(2ndB)" cached a Group-D team, so the real Group-B runner-up wins instead');
+
+// labelWithMatchup expands a projected opponent two feeder games deep -- "Winner of Playin"
+// becomes "Winner of Playin (AA vs Winner of Cross3 (BB vs CC))", bottoming out at locked teams.
+const nestMatchupGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'NM1', white: 'A1-AA', white_score: 10, dark: 'A2-BB', dark_score: 5, round: 'A bracket', division: 'NESTMATCH', played: true },
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'NM2', white: 'A1-AA', white_score: 10, dark: 'A3-CC', dark_score: 5, round: 'A bracket', division: 'NESTMATCH', played: true },
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'NM3', white: 'A2-BB', white_score: 10, dark: 'A3-CC', dark_score: 5, round: 'A bracket', division: 'NESTMATCH', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'NM4', white: '2ndA-BB', white_score: null, dark: '3rdA-CC', dark_score: null, round: 'Cross3', division: 'NESTMATCH', played: false },
+  { date: 'd', time: '9:30 AM', location: 'X', game_id: 'NM6', white: '1stA-AA', white_score: null, dark: 'W#Cross3', dark_score: null, round: 'Playin', division: 'NESTMATCH', played: false },
+  { date: 'd', time: '10:00 AM', location: 'X', game_id: 'NM5', white: 'X1(1stD)-DD', white_score: null, dark: 'W#Playin', dark_score: null, round: 'final', division: 'NESTMATCH', played: false },
+];
+assertEqual(global.Resolver.resolveDivision(nestMatchupGames).games.find((g) => g.game_id === 'NM5').darkLabel, 'Winner of Playin (AA vs Winner of Cross3 (BB vs CC))', 'labelWithMatchup: expands the projected opponent two feeder games deep');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

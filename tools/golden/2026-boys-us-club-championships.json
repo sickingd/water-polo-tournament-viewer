@@ -1,0 +1,446 @@
+{
+  "10U_COED": {
+    "standings": {
+      "A": [
+        "COMMMERCE BLACK",
+        "CV PREMIER",
+        "ROSE BOWL",
+        "SBWPC",
+        "CHAWP",
+        "SD SHORES",
+        "ECA"
+      ]
+    },
+    "finalPlacements": {
+      "CHAWP": 5,
+      "COMMMERCE BLACK": 1,
+      "CV PREMIER": 2,
+      "ECA": 7,
+      "ROSE BOWL": 3,
+      "SBWPC": 4,
+      "SD SHORES": 6
+    },
+    "games": {
+      "10U_COED-100": "COMMMERCE BLACK | SD SHORES | final",
+      "10U_COED-101": "ECA | CHAWP | final",
+      "10U_COED-102": "CV PREMIER | ROSE BOWL | final",
+      "10U_COED-103": "COMMMERCE BLACK | SBWPC | final",
+      "10U_COED-104": "CHAWP | SD SHORES | final",
+      "10U_COED-105": "ECA | ROSE BOWL | final",
+      "10U_COED-106": "CV PREMIER | SBWPC | final",
+      "10U_COED-107": "ECA | COMMMERCE BLACK | final",
+      "10U_COED-108": "CV PREMIER | SD SHORES | final",
+      "10U_COED-109": "CHAWP | SBWPC | final",
+      "10U_COED-110": "ROSE BOWL | SD SHORES | final",
+      "10U_COED-111": "ROSE BOWL | SBWPC | final",
+      "10U_COED-112": "CHAWP | CV PREMIER | final",
+      "10U_COED-113": "COMMMERCE BLACK | ROSE BOWL | final",
+      "10U_COED-114": "ECA | SBWPC | final",
+      "10U_COED-115": "CHAWP | COMMMERCE BLACK | final",
+      "10U_COED-116": "ECA | CV PREMIER | final",
+      "10U_COED-117": "SD SHORES | SBWPC | final",
+      "10U_COED-118": "CHAWP | ROSE BOWL | final",
+      "10U_COED-119": "COMMMERCE BLACK | CV PREMIER | final",
+      "10U_COED-120": "ECA | SD SHORES | final"
+    }
+  },
+  "12U_BOYS": {
+    "standings": {
+      "A": [
+        "SOCAL",
+        "NSD STARS",
+        "COMMERCE",
+        "CARLSBAD SILVER"
+      ],
+      "B": [
+        "SBWPC",
+        "CARLSBAD BLACK",
+        "908 BLUE",
+        "RIVERSIDE"
+      ],
+      "C": [
+        "SD SHORES",
+        "CHAWP",
+        "CV PREMIER"
+      ],
+      "D": [
+        "SOCAL",
+        "CARLSBAD BLACK"
+      ],
+      "E": [
+        "SBWPC",
+        "CHAWP"
+      ],
+      "F": [
+        "NSD STARS",
+        "SD SHORES"
+      ],
+      "G": [
+        "COMMERCE",
+        "908 BLUE",
+        "CV PREMIER",
+        "RIVERSIDE",
+        "CARLSBAD SILVER"
+      ],
+      "H": [
+        "NSD STARS",
+        "SBWPC",
+        "SOCAL"
+      ],
+      "J": [
+        "SD SHORES",
+        "CARLSBAD BLACK",
+        "CHAWP"
+      ]
+    },
+    "finalPlacements": {
+      "908 BLUE": 8,
+      "CARLSBAD BLACK": 5,
+      "CARLSBAD SILVER": 11,
+      "CHAWP": 6,
+      "COMMERCE": 7,
+      "CV PREMIER": 9,
+      "NSD STARS": 1,
+      "RIVERSIDE": 10,
+      "SBWPC": 2,
+      "SD SHORES": 4,
+      "SOCAL": 3
+    },
+    "games": {
+      "12U_BOYS-100": "COMMERCE | NSD STARS | final",
+      "12U_BOYS-101": "SOCAL | CARLSBAD SILVER | final",
+      "12U_BOYS-102": "CARLSBAD BLACK | 908 BLUE | final",
+      "12U_BOYS-103": "SBWPC | RIVERSIDE | final",
+      "12U_BOYS-104": "SOCAL | NSD STARS | final",
+      "12U_BOYS-105": "COMMERCE | CARLSBAD SILVER | final",
+      "12U_BOYS-106": "SD SHORES | CV PREMIER | final",
+      "12U_BOYS-107": "CARLSBAD BLACK | RIVERSIDE | final",
+      "12U_BOYS-108": "SBWPC | 908 BLUE | final",
+      "12U_BOYS-109": "SD SHORES | CHAWP | final",
+      "12U_BOYS-110": "CV PREMIER | CHAWP | final",
+      "12U_BOYS-111": "SOCAL | COMMERCE | final",
+      "12U_BOYS-112": "NSD STARS | CARLSBAD SILVER | final",
+      "12U_BOYS-113": "SBWPC | CARLSBAD BLACK | final",
+      "12U_BOYS-114": "908 BLUE | RIVERSIDE | final",
+      "12U_BOYS-115": "SD SHORES | NSD STARS | final",
+      "12U_BOYS-116": "CV PREMIER | CARLSBAD SILVER | final",
+      "12U_BOYS-117": "SOCAL | CARLSBAD BLACK | final",
+      "12U_BOYS-118": "COMMERCE | RIVERSIDE | final",
+      "12U_BOYS-119": "SBWPC | CHAWP | final",
+      "12U_BOYS-120": "908 BLUE | CARLSBAD SILVER | final",
+      "12U_BOYS-121": "COMMERCE | CARLSBAD SILVER | final",
+      "12U_BOYS-122": "908 BLUE | CV PREMIER | final",
+      "12U_BOYS-123": "CARLSBAD BLACK | SD SHORES | final",
+      "12U_BOYS-124": "SOCAL | NSD STARS | final",
+      "12U_BOYS-125": "COMMERCE | 908 BLUE | final",
+      "12U_BOYS-126": "CV PREMIER | RIVERSIDE | final",
+      "12U_BOYS-127": "CHAWP | SD SHORES | final",
+      "12U_BOYS-128": "SBWPC | NSD STARS | final",
+      "12U_BOYS-129": "CARLSBAD SILVER | RIVERSIDE | final",
+      "12U_BOYS-130": "CARLSBAD BLACK | CHAWP | final",
+      "12U_BOYS-131": "SOCAL | SBWPC | final"
+    }
+  },
+  "14U_BOYS": {
+    "standings": {
+      "A": [
+        "LA PREMIER",
+        "NSD STARS",
+        "PAC ORANGE"
+      ],
+      "B": [
+        "SD SHORES",
+        "CHAWP",
+        "TRILOGY"
+      ],
+      "C": [
+        "STANFORD",
+        "908 BLUE",
+        "CARLSBAD"
+      ],
+      "D": [
+        "COMMERCE",
+        "ROSE BOWL",
+        "SD SHORES GOLD"
+      ],
+      "E": [
+        "COMMERCE",
+        "LA PREMIER",
+        "CHAWP",
+        "908 BLUE"
+      ],
+      "F": [
+        "SD SHORES",
+        "STANFORD",
+        "ROSE BOWL",
+        "NSD STARS"
+      ],
+      "G": [
+        "CARLSBAD",
+        "SD SHORES GOLD",
+        "PAC ORANGE",
+        "TRILOGY"
+      ]
+    },
+    "finalPlacements": {
+      "908 BLUE": 8,
+      "CARLSBAD": 9,
+      "CHAWP": 5,
+      "COMMERCE": 2,
+      "LA PREMIER": 4,
+      "NSD STARS": 7,
+      "PAC ORANGE": 11,
+      "ROSE BOWL": 6,
+      "SD SHORES": 1,
+      "SD SHORES GOLD": 10,
+      "STANFORD": 3,
+      "TRILOGY": 12
+    },
+    "games": {
+      "14U_BOYS-100": "SD SHORES | TRILOGY | final",
+      "14U_BOYS-101": "NSD STARS | PAC ORANGE | final",
+      "14U_BOYS-102": "ROSE BOWL | SD SHORES GOLD | final",
+      "14U_BOYS-103": "CHAWP | TRILOGY | final",
+      "14U_BOYS-104": "LA PREMIER | PAC ORANGE | final",
+      "14U_BOYS-105": "COMMERCE | SD SHORES GOLD | final",
+      "14U_BOYS-106": "SD SHORES | CHAWP | final",
+      "14U_BOYS-107": "LA PREMIER | NSD STARS | final",
+      "14U_BOYS-108": "ROSE BOWL | COMMERCE | final",
+      "14U_BOYS-109": "CARLSBAD | 908 BLUE | final",
+      "14U_BOYS-110": "STANFORD | 908 BLUE | final",
+      "14U_BOYS-111": "STANFORD | CARLSBAD | final",
+      "14U_BOYS-112": "LA PREMIER | 908 BLUE | final",
+      "14U_BOYS-113": "COMMERCE | CHAWP | final",
+      "14U_BOYS-114": "SD SHORES | ROSE BOWL | final",
+      "14U_BOYS-115": "STANFORD | NSD STARS | final",
+      "14U_BOYS-116": "LA PREMIER | CHAWP | final",
+      "14U_BOYS-117": "COMMERCE | 908 BLUE | final",
+      "14U_BOYS-118": "SD SHORES | NSD STARS | final",
+      "14U_BOYS-119": "STANFORD | ROSE BOWL | final",
+      "14U_BOYS-120": "PAC ORANGE | SD SHORES GOLD | final",
+      "14U_BOYS-121": "TRILOGY | CARLSBAD | final",
+      "14U_BOYS-122": "PAC ORANGE | CARLSBAD | final",
+      "14U_BOYS-123": "TRILOGY | SD SHORES GOLD | final",
+      "14U_BOYS-124": "CHAWP | 908 BLUE | final",
+      "14U_BOYS-125": "PAC ORANGE | TRILOGY | final",
+      "14U_BOYS-126": "CARLSBAD | SD SHORES GOLD | final",
+      "14U_BOYS-127": "CHAWP | ROSE BOWL | final",
+      "14U_BOYS-128": "908 BLUE | NSD STARS | final",
+      "14U_BOYS-129": "SD SHORES | STANFORD | final",
+      "14U_BOYS-130": "NSD STARS | ROSE BOWL | final",
+      "14U_BOYS-131": "LA PREMIER | COMMERCE | final",
+      "14U_BOYS-132": "LA PREMIER | STANFORD | final",
+      "14U_BOYS-133": "COMMERCE | SD SHORES | final"
+    }
+  },
+  "16U_BOYS": {
+    "standings": {
+      "A": [
+        "SD SHORES BLACK",
+        "ECA",
+        "CHAWP BLUE"
+      ],
+      "B": [
+        "ROSE BOWL RED",
+        "DEVILS GATE",
+        "TRILOGY"
+      ],
+      "C": [
+        "CHAWP WHITE",
+        "NSD STARS",
+        "LEGENDS",
+        "ROSE BOWL BLACK"
+      ],
+      "D": [
+        "KERN PREMIER",
+        "COMMERCE",
+        "SD SHORES GOLD",
+        "CV PREMIER"
+      ],
+      "E": [
+        "SD SHORES BLACK",
+        "KERN PREMIER",
+        "NSD STARS",
+        "DEVILS GATE"
+      ],
+      "F": [
+        "CHAWP WHITE",
+        "ROSE BOWL RED",
+        "COMMERCE",
+        "ECA"
+      ],
+      "G": [
+        "SD SHORES GOLD",
+        "LEGENDS",
+        "CHAWP BLUE"
+      ],
+      "M": [
+        "TRILOGY",
+        "ROSE BOWL BLACK",
+        "CV PREMIER"
+      ]
+    },
+    "finalPlacements": {
+      "CHAWP BLUE": 13,
+      "CHAWP WHITE": 2,
+      "COMMERCE": 5,
+      "CV PREMIER": 14,
+      "DEVILS GATE": 8,
+      "ECA": 7,
+      "KERN PREMIER": 3,
+      "LEGENDS": 12,
+      "NSD STARS": 6,
+      "ROSE BOWL BLACK": 11,
+      "ROSE BOWL RED": 4,
+      "SD SHORES BLACK": 1,
+      "SD SHORES GOLD": 9,
+      "TRILOGY": 10
+    },
+    "games": {
+      "16U_BOYS-001": "CHAWP WHITE | ROSE BOWL BLACK | final",
+      "16U_BOYS-002": "NSD STARS | LEGENDS | final",
+      "16U_BOYS-003": "COMMERCE | SD SHORES GOLD | final",
+      "16U_BOYS-004": "KERN PREMIER | CV PREMIER | final",
+      "16U_BOYS-100": "CHAWP WHITE | NSD STARS | final",
+      "16U_BOYS-101": "ROSE BOWL BLACK | LEGENDS | final",
+      "16U_BOYS-102": "COMMERCE | KERN PREMIER | final",
+      "16U_BOYS-103": "? | CV PREMIER | final",
+      "16U_BOYS-104": "ROSE BOWL RED | TRILOGY | final",
+      "16U_BOYS-105": "SD SHORES BLACK | CHAWP BLUE | final",
+      "16U_BOYS-106": "DEVILS GATE | TRILOGY | final",
+      "16U_BOYS-107": "ECA | CHAWP BLUE | final",
+      "16U_BOYS-108": "ROSE BOWL RED | DEVILS GATE | final",
+      "16U_BOYS-109": "SD SHORES BLACK | ECA | final",
+      "16U_BOYS-110": "SD SHORES GOLD | LEGENDS | final",
+      "16U_BOYS-111": "SD SHORES BLACK | NSD STARS | final",
+      "16U_BOYS-112": "KERN PREMIER | DEVILS GATE | final",
+      "16U_BOYS-113": "CHAWP BLUE | LEGENDS | final",
+      "16U_BOYS-114": "SD SHORES BLACK | DEVILS GATE | final",
+      "16U_BOYS-115": "KERN PREMIER | NSD STARS | final",
+      "16U_BOYS-116": "TRILOGY | CV PREMIER | final",
+      "16U_BOYS-117": "ROSE BOWL RED | COMMERCE | final",
+      "16U_BOYS-118": "CHAWP WHITE | ECA | final",
+      "16U_BOYS-119": "ROSE BOWL BLACK | CV PREMIER | final",
+      "16U_BOYS-120": "ROSE BOWL RED | ECA | final",
+      "16U_BOYS-121": "CHAWP WHITE | COMMERCE | final",
+      "16U_BOYS-122": "TRILOGY | ROSE BOWL BLACK | final",
+      "16U_BOYS-123": "CHAWP BLUE | SD SHORES GOLD | final",
+      "16U_BOYS-124": "SD SHORES BLACK | KERN PREMIER | final",
+      "16U_BOYS-125": "ROSE BOWL RED | CHAWP WHITE | final",
+      "16U_BOYS-126": "DEVILS GATE | NSD STARS | final",
+      "16U_BOYS-127": "ECA | COMMERCE | final",
+      "16U_BOYS-128": "SD SHORES GOLD | TRILOGY | final",
+      "16U_BOYS-129": "LEGENDS | ROSE BOWL BLACK | final",
+      "16U_BOYS-130": "NSD STARS | COMMERCE | final",
+      "16U_BOYS-131": "DEVILS GATE | ECA | final",
+      "16U_BOYS-132": "KERN PREMIER | ROSE BOWL RED | final",
+      "16U_BOYS-133": "SD SHORES BLACK | CHAWP WHITE | final",
+      "16U_BOYS-134": "CHAWP BLUE | CV PREMIER | final"
+    }
+  },
+  "18U_BOYS": {
+    "standings": {
+      "A": [
+        "SD SHORES BLACK",
+        "NSD STARS",
+        "CHAWP BLUE"
+      ],
+      "B": [
+        "SD SHORES GOLD",
+        "SOCAL",
+        "ECA"
+      ],
+      "C": [
+        "CARLSBAD",
+        "CHAWP WHITE",
+        "LEGENDS",
+        "PAC ORANGE"
+      ],
+      "D": [
+        "COMMERCE",
+        "SUPREME",
+        "CV PREMIER",
+        "TRILOGY"
+      ],
+      "E": [
+        "SD SHORES BLACK",
+        "COMMERCE",
+        "CARLSBAD",
+        "SOCAL"
+      ],
+      "F": [
+        "SD SHORES GOLD",
+        "CHAWP WHITE",
+        "SUPREME",
+        "NSD STARS"
+      ],
+      "G": [
+        "CV PREMIER",
+        "PAC ORANGE",
+        "CHAWP BLUE"
+      ],
+      "M": [
+        "LEGENDS",
+        "ECA",
+        "TRILOGY"
+      ]
+    },
+    "finalPlacements": {
+      "CARLSBAD": 6,
+      "CHAWP BLUE": 13,
+      "CHAWP WHITE": 3,
+      "COMMERCE": 4,
+      "CV PREMIER": 9,
+      "ECA": 11,
+      "LEGENDS": 10,
+      "NSD STARS": 8,
+      "PAC ORANGE": 12,
+      "SD SHORES BLACK": 2,
+      "SD SHORES GOLD": 1,
+      "SOCAL": 7,
+      "SUPREME": 5,
+      "TRILOGY": 14
+    },
+    "games": {
+      "18U_BOYS-001": "COMMERCE | TRILOGY | final",
+      "18U_BOYS-002": "SUPREME | CV PREMIER | final",
+      "18U_BOYS-003": "CARLSBAD | PAC ORANGE | final",
+      "18U_BOYS-004": "CHAWP WHITE | LEGENDS | final",
+      "18U_BOYS-100": "ECA | SD SHORES GOLD | final",
+      "18U_BOYS-101": "SD SHORES BLACK | NSD STARS | final",
+      "18U_BOYS-102": "SOCAL | ECA | final",
+      "18U_BOYS-103": "NSD STARS | CHAWP BLUE | final",
+      "18U_BOYS-104": "PAC ORANGE | LEGENDS | final",
+      "18U_BOYS-105": "COMMERCE | SUPREME | final",
+      "18U_BOYS-106": "TRILOGY | CV PREMIER | final",
+      "18U_BOYS-107": "SOCAL | SD SHORES GOLD | final",
+      "18U_BOYS-108": "SD SHORES BLACK | CHAWP BLUE | final",
+      "18U_BOYS-109": "CARLSBAD | CHAWP WHITE | final",
+      "18U_BOYS-110": "SD SHORES BLACK | CARLSBAD | final",
+      "18U_BOYS-111": "COMMERCE | SOCAL | final",
+      "18U_BOYS-112": "SD SHORES GOLD | SUPREME | final",
+      "18U_BOYS-113": "CHAWP WHITE | NSD STARS | final",
+      "18U_BOYS-114": "SD SHORES BLACK | SOCAL | final",
+      "18U_BOYS-115": "COMMERCE | CARLSBAD | final",
+      "18U_BOYS-116": "SD SHORES GOLD | NSD STARS | final",
+      "18U_BOYS-117": "CHAWP WHITE | SUPREME | final",
+      "18U_BOYS-118": "ECA | LEGENDS | final",
+      "18U_BOYS-119": "CHAWP BLUE | PAC ORANGE | final",
+      "18U_BOYS-120": "ECA | TRILOGY | final",
+      "18U_BOYS-121": "CV PREMIER | PAC ORANGE | final",
+      "18U_BOYS-122": "LEGENDS | TRILOGY | final",
+      "18U_BOYS-123": "CHAWP BLUE | CV PREMIER | final",
+      "18U_BOYS-124": "SD SHORES BLACK | COMMERCE | final",
+      "18U_BOYS-125": "SD SHORES GOLD | CHAWP WHITE | final",
+      "18U_BOYS-126": "COMMERCE | CHAWP WHITE | final",
+      "18U_BOYS-127": "SD SHORES BLACK | SD SHORES GOLD | final",
+      "18U_BOYS-128": "SOCAL | CARLSBAD | final",
+      "18U_BOYS-129": "NSD STARS | SUPREME | final",
+      "18U_BOYS-130": "CV PREMIER | LEGENDS | final",
+      "18U_BOYS-131": "CARLSBAD | SUPREME | final",
+      "18U_BOYS-132": "SOCAL | NSD STARS | final",
+      "18U_BOYS-133": "CHAWP BLUE | TRILOGY | final",
+      "18U_BOYS-134": "PAC ORANGE | ECA | final"
+    }
+  }
+}
