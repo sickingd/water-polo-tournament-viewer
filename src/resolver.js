@@ -144,9 +144,36 @@
         team, raw,
       };
     }
-    // W#/L# progress, round-name or numeric form: W#Cross1, L#12
-    if ((m = /^([WL])#(.+)$/.exec(head))) {
-      return { type: 'progress', wl: m[1], ref: m[2], team, raw };
+    // W#/L# progress, round-name or numeric form: W#Cross1, L#12. `ref` stops at the first
+    // whitespace/"+" -- confirmed live, "W#18  LAMORINDA" (the ingestion-normalized form of
+    // "WIN #18  LAMORINDA", itself missing the dash splitToken needs to separate off a team
+    // name) and "L#3 + SD SHORES GOLD" would otherwise swallow the whole remainder into
+    // `ref` (or, for the "+" case, leave a stray "+" stuck on the front of `team`), so it can
+    // never numerically match anything and the real team name is lost or mangled. Any such
+    // trailing separator-delimited text is a team name exactly like a dash-separated one,
+    // just with different punctuation -- and since this is a W#/L# progress ref, the cached
+    // team here is only ever a fallback anyway (resolveToken verifies the feeder game's own
+    // score independently first); a clean name just keeps that fallback honest too.
+    if ((m = /^([WL])#(\S+)(?:[\s+]+(.*))?$/.exec(head))) {
+      return { type: 'progress', wl: m[1], ref: m[2], team: team || (m[3] && m[3].trim()) || null, raw };
+    }
+    // Some Club Championships sheets spell this out as "WIN #7"/"WINNER #11" or "LOSE #7"/
+    // "LOSER #11" instead of the compact "W#7" the ingestion normalizer is supposed to
+    // rewrite it to (worker/index.js's normalizeClubChampsToken / tools/refresh_data.py's
+    // normalize_clubchamps_token) -- handled here too as defense in depth, since a stale
+    // cached data file (or a not-yet-redeployed ingestion fix) would otherwise leave this as
+    // an unrepairable bare 'team' literal: confirmed live, "WIN #7-LAMORINDA" fell all the
+    // way through to {type:'team', team:'LAMORINDA'} -- a cached name that's ALSO truncated
+    // (the real team is "LAMORINDA A"), but 'team' tokens are deliberately excluded from
+    // repairTypoedTeamNames since a genuine literal team name must never be "corrected", so
+    // the typo became permanently unrepairable on top of losing the progress-ref semantics.
+    // Matched against the RAW string, not `head` -- the punctuation before the team name is
+    // ALSO inconsistent: a dash ("WIN #7-LAMORINDA"), no punctuation at all (just whitespace:
+    // "WIN #18  LAMORINDA"), or a "+" (confirmed live: "LOSE #3 + SD SHORES GOLD") -- and
+    // splitToken only ever populates `team` separately from `head` when a dash is present;
+    // without one, the whole garbled string becomes `head` and nothing else would match it.
+    if ((m = /^(WIN(?:NER)?|LOSE(?:R)?)\s*#\s*(\d+)[\s+-]*(.*)$/i.exec((raw || '').trim()))) {
+      return { type: 'progress', wl: /^WIN/i.test(m[1]) ? 'W' : 'L', ref: m[2], team: m[3].trim() || null, raw };
     }
     // ordinal group finish: 2ndB, 13thG -- can ALSO carry its own wrapped source(s), e.g.
     // "3rdD(W#7)", needed whenever (like group D in 12U_BOYS_D2) the feeder games' own round
@@ -417,7 +444,32 @@
     groups.forEach((g, let_) => {
       const allPlayed = g.games.every((e) => e.final);
       const ranked = rankRecords(g.records);
-      standings[let_] = { complete: allPlayed, ranked, size: g.records.size, games: g.games };
+      // A multi-game group literally labeled "bracket" is either a real round-robin pool
+      // (some position plays more than once -- standings genuinely mean something) or a
+      // single-elimination PERFECT MATCHING (e.g. a 4-team "W1 vs W4, W2 vs W3" quarterfinal
+      // pairing, every position playing exactly once). In that second shape the entry round's
+      // own win/loss can NEVER answer "who's 1st/2nd" by itself -- that needs a follow-up
+      // decider (e.g. a "1/2 W" semifinal, resolved via nextGameAfterBySemiFinalLabel /
+      // findSemiFinalLabelGame), which is a W#/L# progress ref that never carries a
+      // {LET}{pos} token and so never joins this group at all. Trusting g.complete/g.ranked
+      // here the moment the entry round finishes would silently rank entrants by an
+      // irrelevant goal-diff tiebreak among teams who never played each other -- confirmed
+      // live: 18U Girls' "1st"/"3rd" games showed the two entry-round winners/losers paired
+      // against each other instead of TBD, because the real semifinals (the ACTUAL decider)
+      // hadn't been played yet. A single-game group (the simple 2-entrant decider shape, e.g.
+      // "M1 vs M2") is exempt -- there the one game's own result directly and correctly IS the
+      // 1st/2nd answer, no follow-up needed.
+      //
+      // `decidable: false` rather than omitting the group entirely -- other consumers
+      // (nextGameAfterByGroupFinish's tryLet) rely on ctx.standings[let_] actually EXISTING,
+      // with its real games.length, to recognize "this letter has more than one scheduled
+      // game, don't treat it as a single 2-entrant decider"; dropping the group made that
+      // check silently no-op (group undefined skips the length check entirely) and caused a
+      // DIFFERENT live regression (two unrelated bracket games swapping their resolved teams
+      // in a completed tournament). Keep `games`/`size`/`ranked` available either way; only
+      // resolveToken's 'finish' case is told not to trust completeness here.
+      const decidable = g.games.length <= 1 || isRealMultiGamePool(g);
+      standings[let_] = { complete: allPlayed, ranked, size: g.records.size, games: g.games, decidable };
     });
     return standings;
   }
@@ -623,19 +675,32 @@
           // legitimate "official result overrides our tiebreaker" case (contrast the
           // officialOverrideGames test, where the cached name IS one of this group's own
           // competitors) -- prefer the live-computed answer over an impossible cache.
-          if (g.complete && g.ranked[tok.ord - 1] && knownInAnotherGroup(ctx, tok.team, tok.let)) {
+          if (g.decidable && g.complete && g.ranked[tok.ord - 1] && knownInAnotherGroup(ctx, tok.team, tok.let)) {
             return { team: g.ranked[tok.ord - 1].name, locked: true };
           }
           return { team: tok.team, locked: true };
         }
-        if (g && g.complete && g.ranked[tok.ord - 1]) {
+        if (g && g.decidable && g.complete && g.ranked[tok.ord - 1]) {
           return { team: g.ranked[tok.ord - 1].name, locked: true };
+        }
+        // A 4-team mini-bracket's quarterfinal-pair group (e.g. "W bracket": W1 vs W4, W2 vs
+        // W3) is kept in ctx.standings (other consumers rely on it existing) but marked
+        // `decidable: false` (see computeGroupStandings) -- its real decider is a LATER
+        // "1/2 W"/"3/4 W" semifinal/consolation game, resolved exactly the same way a bare
+        // W#/L# progress ref already is: verified independently when final, or an unresolved
+        // hint (with the matchup attached for
+        // display) when not.
+        const semiGame = findSemiFinalLabelGame(ctx, tok.let, tok.ord);
+        if (semiGame) {
+          const r = resolveFromGame(semiGame.game, semiGame.wl, ctx, depth);
+          if (r.team) return r;
+          if (r.hint) return { team: null, locked: false, hint: r.hint, feederGame: r.feederGame };
         }
         // Group isn't fully played yet, but this specific position might already be
         // unreachable for anyone else regardless of how the remaining games go (e.g. a team
         // that's already won out can't be caught) -- see clinchedRanks for how "might" is
         // decided conservatively, by win count alone.
-        if (g && !g.complete) {
+        if (g && g.decidable && !g.complete) {
           const clinched = clinchedRanks(g);
           if (clinched.has(tok.ord)) return { team: clinched.get(tok.ord), locked: true };
         }
@@ -924,6 +989,23 @@
     return findFeederGameForFinish(ctx, base + (wl === 'W' ? 1 : 2), let_);
   }
 
+  // The reverse direction of nextGameAfterBySemiFinalLabel: given a bare "{ord}{LET}" finish
+  // reference (e.g. "1stW"), find the "1/2 W"/"3/4 W" semifinal/consolation game that's the
+  // REAL decider for it -- needed because computeGroupStandings deliberately excludes this
+  // shape's own quarterfinal-round games from ctx.standings (their win/loss alone can never
+  // answer "who's 1st/2nd"; see its own comment), so resolveToken's 'finish' case has nowhere
+  // else to look once g is undefined. ord 1/2 -> that game's winner/loser; ord 3/4 -> the
+  // "3/4 LET" consolation game's winner/loser.
+  function findSemiFinalLabelGame(ctx, let_, ord) {
+    const base = ord <= 2 ? '1/2' : '3/4';
+    const wl = (ord === 1 || ord === 3) ? 'W' : 'L';
+    const game = ctx.division.games.find((e) => {
+      const m = /^(1\/2|3\/4)\s+([A-Za-z]+)$/i.exec((e.raw.round || '').trim());
+      return !!m && m[1] === base && m[2].toUpperCase() === let_.toUpperCase();
+    });
+    return game ? { game, wl } : null;
+  }
+
   // Same idea as nextGameAfterBySemiFinalLabel, different spelling: "1st/2ndH" or "3rd/4thD"
   // (ordinal/ordinal+letter, no space) instead of "1/2 X"/"3/4 X". This shape's own tokens
   // are usually W#/L# pair refs (e.g. "W#H1/H4") rather than {LET}{pos} seeds, so neither
@@ -1127,7 +1209,7 @@
       // that range and union their downstream paths, instead of reporting nothing at all.
       const myLet = findTeamGroupLetter(ctx, myGames, teamName);
       const myGroup = myLet && ctx.standings[myLet];
-      if (myGroup && !myGroup.complete) {
+      if (myGroup && myGroup.decidable && !myGroup.complete) {
         const myRange = groupRankRanges(myGroup).get(teamName);
         if (myRange) {
           // Same unlabeled-terminal-bracket check as the pendingPoolGame branch below: if
@@ -1299,8 +1381,12 @@
     const gamesByPos = new Map();
     group.games.forEach((e) => {
       [e.white, e.dark].forEach((tok) => {
-        if (tok.type !== 'slot' && tok.type !== 'seed') return;
-        const key = tok.let + ':' + tok.pos;
+        let key;
+        if (tok.type === 'slot' || tok.type === 'seed') key = tok.let + ':' + tok.pos;
+        // A flat round robin (e.g. 10U_COED) has no {LET}{pos} grammar at all -- every token
+        // is a bare 'team' literal, so identity has to be the team NAME instead of a position.
+        else if (tok.type === 'team' && tok.team) key = 'team:' + tok.team;
+        else return;
         gamesByPos.set(key, (gamesByPos.get(key) || 0) + 1);
       });
     });
@@ -1448,7 +1534,9 @@
     // Only hypothesize finishes while the group is genuinely undecided. If it's already
     // complete and there's still no realCurrent, the team's actual bracket run (locked in
     // from its real finish) has already played all the way through -- nothing left to guess.
-    if (!group || group.complete) return results;
+    // A non-decidable group (see computeGroupStandings) is excluded the same way -- its
+    // win/loss-based "finish" isn't a real answer to hypothesize from either.
+    if (!group || group.complete || !group.decidable) return results;
     // The home group can be *unscored* (a game never got a final typed in) without being
     // genuinely undecided for THIS team -- if they have a later final game elsewhere, that
     // already proves what happened here (same "stale game" reasoning as buildScenarios

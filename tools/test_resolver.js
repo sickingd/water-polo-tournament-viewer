@@ -408,5 +408,68 @@ const nestMatchupGames = [
 ];
 assertEqual(global.Resolver.resolveDivision(nestMatchupGames).games.find((g) => g.game_id === 'NM5').darkLabel, 'Winner of Playin (AA vs Winner of Cross3 (BB vs CC))', 'labelWithMatchup: expands the projected opponent two feeder games deep');
 
+// Regression test: a 4-team mini-bracket whose quarterfinal-round games are literally
+// labeled "W bracket" (W1 vs W4, W2 vs W3, a single-elimination PERFECT MATCHING, every
+// position playing exactly once) must NOT have its "1stW"/"2ndW" resolved from that round's
+// own win/loss -- those two winners never played each other, so ranking them by goal-diff
+// tiebreak is meaningless. The REAL decider is a later "1/2 W" semifinal (a W#/L# progress
+// ref that never carries a {LET}{pos} token, so it never joins the "W bracket" group at
+// all). Seen live: 18U Girls' "1st"/"3rd" games paired the two quarterfinal winners against
+// each other (and the two losers against each other) as if the semifinals were already
+// decided, when neither had been played yet.
+const quarterThenSemiGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'QS01', white: 'W2(1stL)-LAMORINDA', white_score: 10, dark: 'W3(1stM)-DIABLO', dark_score: 14, round: 'W bracket', division: 'QTHENSEMI', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'QS02', white: 'W1(1stI)-SBWPC', white_score: 12, dark: 'W4(1stP)-SDSHORES', dark_score: 4, round: 'W bracket', division: 'QTHENSEMI', played: true },
+  { date: 'd', time: '10:00 AM', location: 'X', game_id: 'QS03', white: 'X2(1stK)-REGENCY', white_score: 13, dark: 'X3(1stN)-SOCAL', dark_score: 11, round: 'X bracket', division: 'QTHENSEMI', played: true },
+  { date: 'd', time: '11:00 AM', location: 'X', game_id: 'QS04', white: 'X1(1stJ)-NEWPORT', white_score: 12, dark: 'X4(1stO)-SBWPCB', dark_score: 8, round: 'X bracket', division: 'QTHENSEMI', played: true },
+  { date: 'd2', time: '8:00 AM', location: 'X', game_id: 'QS05', white: 'W#2-SBWPC', white_score: null, dark: 'W#1-DIABLO', dark_score: null, round: '1/2 W', division: 'QTHENSEMI', played: false },
+  { date: 'd2', time: '9:00 AM', location: 'X', game_id: 'QS06', white: 'W#3-REGENCY', white_score: null, dark: 'W#4-NEWPORT', dark_score: null, round: '1/2 X', division: 'QTHENSEMI', played: false },
+  { date: 'd2', time: '10:00 AM', location: 'X', game_id: 'QS07', white: 'AA1(1stW)-', white_score: null, dark: 'AA2(1stX)-', dark_score: null, round: '1st', division: 'QTHENSEMI', played: false },
+  { date: 'd2', time: '11:00 AM', location: 'X', game_id: 'QS08', white: 'BB1(2ndW)-', white_score: null, dark: 'BB2(2ndX)-', dark_score: null, round: '3rd', division: 'QTHENSEMI', played: false },
+];
+const quarterThenSemiResult = global.Resolver.resolveDivision(quarterThenSemiGames);
+assertEqual(quarterThenSemiResult.standings['W'].decidable, false, 'Quarter-then-semi: Group W (a perfect-matching pair, not a real pool) is marked non-decidable');
+const qs07 = quarterThenSemiResult.games.find((g) => g.game_id === 'QS07');
+assertEqual(qs07.whiteTeam, null, 'Quarter-then-semi: "1st" game does NOT pair the two quarterfinal winners against each other before the real semifinal is played');
+// The hint's round-name is just the feeder's roundName (the FIRST word of its round label,
+// "1/2" -- see buildDivision/chronoKey's shared roundName convention), not the full "1/2 W";
+// the matchup detail itself already disambiguates which semifinal is meant.
+assertEqual(qs07.whiteLabel, 'Winner of 1/2 (SBWPC vs DIABLO)', 'Quarter-then-semi: instead shows the real pending semifinal matchup');
+// Now play the semifinals and confirm "1stW"/"2ndW" resolve correctly afterward.
+const quarterThenSemiPlayedGames = quarterThenSemiGames.map((g) => (g.game_id === 'QS05' || g.game_id === 'QS06')
+  ? { ...g, white_score: 10, dark_score: 6, played: true }
+  : g);
+const playedResult = global.Resolver.resolveDivision(quarterThenSemiPlayedGames);
+const qs07Played = playedResult.games.find((g) => g.game_id === 'QS07');
+assertEqual(qs07Played.whiteTeam, 'SBWPC', 'Quarter-then-semi: once the semifinal is actually played, "1stW" resolves to its real winner');
+const qs08Played = playedResult.games.find((g) => g.game_id === 'QS08');
+assertEqual(qs08Played.darkTeam, 'NEWPORT', 'Quarter-then-semi: "2ndX" resolves to the real semifinal loser');
+
+// Regression test: a genuine multi-game round robin is still marked decidable (the new flag
+// must not affect any real pool), and its standings still resolve finishes normally.
+const realPoolGames = [
+  { date: 'd', time: '8:00 AM', location: 'X', game_id: 'RP1', white: 'C1-AONE', white_score: 10, dark: 'C2-BTWO', dark_score: 5, round: 'C bracket', division: 'REALPOOL', played: true },
+  { date: 'd', time: '9:00 AM', location: 'X', game_id: 'RP2', white: 'C1-AONE', white_score: 8, dark: 'C3-CTHREE', dark_score: 9, round: 'C bracket', division: 'REALPOOL', played: true },
+  { date: 'd', time: '10:00 AM', location: 'X', game_id: 'RP3', white: 'C2-BTWO', white_score: 6, dark: 'C3-CTHREE', dark_score: 4, round: 'C bracket', division: 'REALPOOL', played: true },
+];
+assertEqual(global.Resolver.resolveDivision(realPoolGames).standings['C'].decidable, true, 'Real round-robin pool: still marked decidable (each position plays more than once)');
+
+// Regression test: parseToken must tolerate every separator style seen live for the verbose
+// "WIN #N"/"LOSE #N" progress-ref spelling -- a dash ("WIN #7-LAMORINDA"), no punctuation at
+// all (just whitespace: "WIN #18  LAMORINDA"), and a "+" ("LOSE #3 + SD SHORES GOLD") -- and
+// must keep parsing the existing compact "W#7"/"L#12" forms exactly as before.
+assertEqual(global.Resolver.parseToken('W#11').ref, '11', 'progress token: bare "W#11" (no team) parses correctly');
+assertEqual(global.Resolver.parseToken('W#Cross1').ref, 'Cross1', 'progress token: "W#Cross1" (named round, no team) parses correctly');
+const dashForm = global.Resolver.parseToken('WIN #7-LAMORINDA');
+assertEqual(dashForm.type === 'progress' && dashForm.wl === 'W' && dashForm.ref === '7' && dashForm.team, 'LAMORINDA', 'progress token: "WIN #7-LAMORINDA" (dash) parses as a clean progress ref');
+const noDashForm = global.Resolver.parseToken('WIN #18  LAMORINDA');
+assertEqual(noDashForm.type === 'progress' && noDashForm.wl === 'W' && noDashForm.ref === '18' && noDashForm.team, 'LAMORINDA', 'progress token: "WIN #18  LAMORINDA" (no dash, just whitespace) parses as a clean progress ref');
+const plusForm = global.Resolver.parseToken('LOSE #3 + SD SHORES GOLD');
+assertEqual(plusForm.type === 'progress' && plusForm.wl === 'L' && plusForm.ref === '3' && plusForm.team, 'SD SHORES GOLD', 'progress token: "LOSE #3 + SD SHORES GOLD" ("+" separator) parses as a clean progress ref');
+const compactWithTeam = global.Resolver.parseToken('W#11-DIABLO A');
+assertEqual(compactWithTeam.ref === '11' && compactWithTeam.team, 'DIABLO A', 'progress token: compact "W#11-DIABLO A" still parses exactly as before');
+const compactNoTeam = global.Resolver.parseToken('L#12');
+assertEqual(compactNoTeam.ref === '12' && compactNoTeam.team, null, 'progress token: compact "L#12" (no team) still parses exactly as before');
+
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

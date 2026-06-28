@@ -748,7 +748,13 @@ function groupTableHTML(let_, g, division, ctx) {
   // standings once EVERY position has a real name, otherwise fall through to the
   // placeholder-aware listing (which already mixes in whatever names ARE known).
   const entrants = ctx ? Resolver.groupEntrants(ctx, let_) : [];
-  const allNamed = entrants.length > 0 && entrants.length === g.ranked.length;
+  // `decidable: false` (see computeGroupStandings) marks a group that's really a single-
+  // elimination perfect matching sharing a letter (e.g. a 4-team "W1 vs W4, W2 vs W3"
+  // quarterfinal pairing) -- every entrant can be fully named and the games fully played
+  // without the W/L/T/GD columns meaning anything (those teams never played each other; the
+  // real 1st/2nd/3rd/4th comes from a later semifinal/consolation game instead). Fall through
+  // to the plain entrant list there instead of a misleading "standings" table.
+  const allNamed = g.decidable !== false && entrants.length > 0 && entrants.length === g.ranked.length;
   let html = `<div class="standings-card">
     <div class="standings-header">Group ${escapeHtml(let_)}${g.complete ? '' : ' <span class="group-strength">(in progress)</span>'}</div>
     <table class="standings-table">

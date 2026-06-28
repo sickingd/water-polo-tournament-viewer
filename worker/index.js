@@ -173,7 +173,11 @@ function buildTournamentData(cfg, csvText) {
 const CC_HEADER_REPEAT = 'LOCATION';
 const CC_BOGUS_DARK = 'GAME';
 const CC_GAME_STAMP_RE = /GAME\s*#\s*(\d+)/i;
-const CC_WINNER_LOSER_RE = /^(WINNER|LOSER)\s*#\s*(\d+)(.*)$/i;
+// Some divisions (confirmed live: the Girls Club Championships sheet) abbreviate this as just
+// "WIN #7"/"LOSE #7" rather than the full "WINNER #11"/"LOSER #11" -- both spellings mean the
+// same thing, so both must rewrite to "W#"/"L#" or this token falls through parseToken's
+// catch-all into a bare, never-repaired literal team name instead of a real progress ref.
+const CC_WINNER_LOSER_RE = /^(WIN(?:NER)?|LOSE(?:R)?)\s*#\s*(\d+)(.*)$/i;
 // No-parens placement-seed form seen in the 12U sheet only, e.g. "E1 -1st A - TEAM" --
 // the shared `seed` token type in src/resolver.js expects parens around the source
 // ("E1(1stA)-TEAM"), which is what sheets using "T3 (3rdF) - " already match once trimmed.
@@ -218,7 +222,7 @@ function normalizeClubChampsToken(raw) {
   s = s.replace(/\s*-\s*/g, '-');
   let m = CC_WINNER_LOSER_RE.exec(s);
   if (m) {
-    const letter = m[1].toUpperCase() === 'WINNER' ? 'W' : 'L';
+    const letter = /^WIN/i.test(m[1]) ? 'W' : 'L';
     return `${letter}#${m[2]}${m[3]}`;
   }
   m = CC_DASHPAREN_SEED_RE.exec(s);

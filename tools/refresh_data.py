@@ -183,7 +183,11 @@ CC_HEADER_REPEAT = 'LOCATION'
 CC_BOGUS_DARK = 'GAME'
 
 CC_GAME_STAMP_RE = re.compile(r'GAME\s*#\s*(\d+)', re.IGNORECASE)
-CC_WINNER_LOSER_RE = re.compile(r'^(WINNER|LOSER)\s*#\s*(\d+)(.*)$', re.IGNORECASE)
+# Some divisions (confirmed live: the Girls Club Championships sheet) abbreviate this as just
+# "WIN #7"/"LOSE #7" rather than the full "WINNER #11"/"LOSER #11" -- both spellings mean the
+# same thing, so both must rewrite to "W#"/"L#" or this token falls through to a bare, never-
+# repaired literal team name instead of a real progress ref.
+CC_WINNER_LOSER_RE = re.compile(r'^(WIN(?:NER)?|LOSE(?:R)?)\s*#\s*(\d+)(.*)$', re.IGNORECASE)
 # No-parens placement-seed form seen in the 12U sheet only, e.g. "E1 -1st A - TEAM" --
 # resolver.js's existing `seed` token type expects parens around the source
 # ("E1(1stA)-TEAM"), which is what files using "T3 (3rdF) - " already match once trimmed.
@@ -233,7 +237,7 @@ def normalize_clubchamps_token(raw):
     s = re.sub(r'\s*-\s*', '-', s)
     m = CC_WINNER_LOSER_RE.match(s)
     if m:
-        letter = 'W' if m.group(1).upper() == 'WINNER' else 'L'
+        letter = 'W' if m.group(1).upper().startswith('WIN') else 'L'
         return f'{letter}#{m.group(2)}{m.group(3)}'
     m = CC_DASHPAREN_SEED_RE.match(s)
     if m:
