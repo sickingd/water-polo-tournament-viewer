@@ -1414,9 +1414,10 @@ function abbrevLocation(loc) {
 }
 </script>
 
-<!-- SEO footer: visible to search crawlers; provides topic context that pure meta tags can't.
-     Kept visually minimal so it doesn't clutter the app UI. -->
-<footer style="padding:20px 16px 36px;border-top:1px solid #e5e7eb;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.7;">
+<!-- SEO footer: kept in the DOM for search crawlers (provides topic context pure meta tags
+     can't), but hidden from regular visitors -- too prominent on the home screen with no
+     real home of its own yet. Remove display:none once it has a proper place in the UI. -->
+<footer style="display:none;padding:20px 16px 36px;border-top:1px solid #e5e7eb;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.7;">
   <p style="font-weight:600;margin-bottom:6px;color:#374151;">About Splash Bracket</p>
   <p>Splash Bracket provides live water polo tournament brackets, real-time scores, team schedules, pool standings, and projected placement for youth and club water polo events. Supported tournaments include:</p>
   <ul style="margin:8px 0 8px 16px;list-style:disc;">
