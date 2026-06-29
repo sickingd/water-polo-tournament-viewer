@@ -11,6 +11,7 @@ const TESTS = [
   'test_app_logic.js',     // app render-layer logic (resolver + inline <script>, DOM stubbed)
   'test_data_invariants.js', // brute-force sweep over ALL committed data: no throw/TBD/inverted range
   'test_golden.js',        // value-lock snapshot of the two completed (frozen) tournaments
+  'test_static_assets.js', // no relative asset refs -- breaks at any path depth other than /
 ];
 
 let anyFailed = false;

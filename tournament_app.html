@@ -9,9 +9,9 @@
 <meta name="description" content="Water polo tournament brackets, live scores &amp; schedules for US Club Championships, Futures Superfinals, Junior Olympics qualifiers, Quicksilver, Newport Invite, and more. Track your team in real time.">
 <meta name="keywords" content="water polo tournament, water polo bracket, water polo junior olympics, water polo JOs, water polo JO quals, water polo JO qualifier, water polo junior olympics qualification, water polo futures, water polo futures finals, water polo futures superfinals, water polo quicksilver tournament, water polo quicksilver, water polo newport invite, water polo newport invitational, water polo SPA, southern pacific aquatics water polo, US Club Water Polo Championships, US Club Championships water polo, club water polo, youth water polo, water polo schedule, water polo results, water polo live scores, water polo standings, water polo pool play, water polo bracket results, water polo placement, water polo elimination bracket, water polo round robin, water polo gold bracket, water polo silver bracket, 12U water polo, 14U water polo, 16U water polo, 18U water polo, boys water polo tournament, girls water polo tournament, age group water polo, Southern California water polo, SoCal water polo, NorCal water polo, California water polo tournament, Western Zone water polo, national water polo championship, USA Water Polo tournament, USAWP tournament, water polo nationals, water polo regionals, water polo invitational, water polo showcase, water polo team schedule, water polo game results, splashbracket, splash bracket water polo, clubwaterpolo">
 <link rel="canonical" href="https://splashbracket.com/">
-<link rel="icon" href="splashbracket_favicon.ico" sizes="any">
-<link rel="icon" type="image/png" sizes="32x32" href="splashbracket_favicon_32x32.png">
-<link rel="apple-touch-icon" href="splashbracket_icon.png">
+<link rel="icon" href="/splashbracket_favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/splashbracket_favicon_32x32.png">
+<link rel="apple-touch-icon" href="/splashbracket_icon.png">
 <!-- Open Graph / link-preview tags (iMessage, Slack, etc. read these for the share card --
      without them the preview is just a blank box with the bare <title>, as seen sharing the
      old "Water Polo Tournament" title with no image at all). -->
@@ -307,12 +307,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   </div>
 </div>
 
-<script src="src/resolver.js"></script>
-<script src="data/manifest.js"></script>
-<script src="data/2026-girls-futures-superfinals.js"></script>
-<script src="data/2026-girls-us-club-championships.js"></script>
-<script src="data/2026-boys-us-club-championships.js"></script>
-<script src="data/2026-boys-futures-superfinals.js"></script>
+<script src="/src/resolver.js"></script>
+<script src="/data/manifest.js"></script>
+<script src="/data/2026-girls-futures-superfinals.js"></script>
+<script src="/data/2026-girls-us-club-championships.js"></script>
+<script src="/data/2026-boys-us-club-championships.js"></script>
+<script src="/data/2026-boys-futures-superfinals.js"></script>
 <script>
 // --- Tournament selection ---
 const MANIFEST = window.TOURNAMENT_MANIFEST || [];
@@ -555,7 +555,7 @@ function renderMyTeam() {
   const el = document.getElementById('myTeamContent');
   if (!favTeam) {
     el.innerHTML = `<div class="no-team-prompt">
-      <img class="logo" src="logo.png" alt="SplashBracket">
+      <img class="logo" src="/logo.png" alt="SplashBracket">
       <h2>Choose Your Team</h2>
       <p>Tap below to pick your team and see all their games, results, and standings.</p>
       <button class="cta-btn" onclick="openPicker()">Pick My Team ⭐</button>
