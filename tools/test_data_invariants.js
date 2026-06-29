@@ -42,7 +42,9 @@ const sandbox = {
   console,
   localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
   addEventListener: () => {},
-  document: { getElementById: (id) => el(id), querySelectorAll: () => [] },
+  location: { pathname: '/' },
+  history: { replaceState: () => {}, pushState: () => {} },
+  document: { getElementById: (id) => el(id), querySelectorAll: () => [], querySelector: () => null },
   setTimeout: () => {}, setInterval: () => {},
 };
 sandbox.global = sandbox; sandbox.globalThis = sandbox; sandbox.window = sandbox;

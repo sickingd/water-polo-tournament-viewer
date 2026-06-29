@@ -5,22 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>Splash Bracket</title>
+<title>Splash Bracket | Water Polo Tournament Brackets & Live Scores</title>
+<meta name="description" content="Water polo tournament brackets, live scores &amp; schedules for US Club Championships, Futures Superfinals, Junior Olympics qualifiers, Quicksilver, Newport Invite, and more. Track your team in real time.">
+<meta name="keywords" content="water polo tournament, water polo bracket, water polo junior olympics, water polo JOs, water polo JO quals, water polo JO qualifier, water polo junior olympics qualification, water polo futures, water polo futures finals, water polo futures superfinals, water polo quicksilver tournament, water polo quicksilver, water polo newport invite, water polo newport invitational, water polo SPA, southern pacific aquatics water polo, US Club Water Polo Championships, US Club Championships water polo, club water polo, youth water polo, water polo schedule, water polo results, water polo live scores, water polo standings, water polo pool play, water polo bracket results, water polo placement, water polo elimination bracket, water polo round robin, water polo gold bracket, water polo silver bracket, 12U water polo, 14U water polo, 16U water polo, 18U water polo, boys water polo tournament, girls water polo tournament, age group water polo, Southern California water polo, SoCal water polo, NorCal water polo, California water polo tournament, Western Zone water polo, national water polo championship, USA Water Polo tournament, USAWP tournament, water polo nationals, water polo regionals, water polo invitational, water polo showcase, water polo team schedule, water polo game results, splashbracket, splash bracket water polo, clubwaterpolo">
+<link rel="canonical" href="https://splashbracket.com/">
 <link rel="icon" href="splashbracket_favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="splashbracket_favicon_32x32.png">
 <link rel="apple-touch-icon" href="splashbracket_icon.png">
 <!-- Open Graph / link-preview tags (iMessage, Slack, etc. read these for the share card --
      without them the preview is just a blank box with the bare <title>, as seen sharing the
      old "Water Polo Tournament" title with no image at all). -->
-<meta property="og:title" content="Splash Bracket">
-<meta property="og:description" content="Live bracket, schedule, and results for your water polo tournament.">
+<meta property="og:title" content="Splash Bracket | Water Polo Tournament Brackets & Live Scores">
+<meta property="og:description" content="Water polo tournament brackets, live scores &amp; schedules for US Club Championships, Futures Superfinals, Junior Olympics qualifiers, Quicksilver, Newport Invite, and more. Track your team in real time.">
 <meta property="og:image" content="https://splashbracket.com/logo.png">
 <meta property="og:url" content="https://splashbracket.com/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Splash Bracket">
-<meta name="twitter:description" content="Live bracket, schedule, and results for your water polo tournament.">
+<meta name="twitter:title" content="Splash Bracket | Water Polo Tournament Brackets & Live Scores">
+<meta name="twitter:description" content="Water polo tournament brackets, live scores &amp; schedules for US Club Championships, Futures Superfinals, Junior Olympics qualifiers, Quicksilver, Newport Invite, and more.">
 <meta name="twitter:image" content="https://splashbracket.com/logo.png">
+<!-- JSON-LD structured data — updated client-side when the active tournament changes -->
+<script type="application/ld+json" id="jsonld-schema">{}</script>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YFCRZ39KRZ"></script>
 <script>
@@ -312,6 +317,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 // --- Tournament selection ---
 const MANIFEST = window.TOURNAMENT_MANIFEST || [];
 function pickDefaultTournamentId() {
+  // /t/<id> URL takes priority -- lets shared links and search engine deep-links open
+  // directly to the right tournament without requiring localStorage state.
+  const urlMatch = window.location.pathname.match(/^\/t\/([^/]+)/);
+  if (urlMatch) {
+    const urlId = decodeURIComponent(urlMatch[1]);
+    if (window.TOURNAMENTS[urlId] && MANIFEST.some((t) => t.id === urlId)) return urlId;
+  }
   const saved = localStorage.getItem('activeTournamentId');
   if (saved && window.TOURNAMENTS[saved] && MANIFEST.some((t) => t.id === saved)) return saved;
   const current = MANIFEST.find((t) => t.status === 'current');
@@ -376,6 +388,33 @@ if (!viewingDivision || !allDivisions().includes(viewingDivision)) {
 }
 
 // --- Init ---
+// If we loaded on '/', push the canonical /t/<id> URL into history so the address bar
+// reflects the active tournament and shares produce the right link.
+(function syncInitialUrl() {
+  if (window.location.pathname === '/' || window.location.pathname === '/tournament_app') {
+    history.replaceState({ tournamentId: activeTournamentId }, '', `/t/${encodeURIComponent(activeTournamentId)}`);
+  }
+})();
+
+// Handle browser back/forward navigation between tournaments.
+window.addEventListener('popstate', function(e) {
+  const id = (e.state && e.state.tournamentId) || pickDefaultTournamentId();
+  if (id && window.TOURNAMENTS[id] && id !== activeTournamentId) {
+    activeTournamentId = id;
+    localStorage.setItem('activeTournamentId', id);
+    TD = window.TOURNAMENTS[id];
+    resolvedCache = {};
+    if (favTeam && !TD.teams.some((t) => t.name === favTeam && t.division === favDiv)) {
+      favTeam = null; favDiv = null;
+      localStorage.removeItem('favTeam'); localStorage.removeItem('favDiv');
+      syncFollowedTeamUserProperty();
+    }
+    viewingDivision = favDiv || allDivisions()[0] || null;
+    renderHeader(); renderMyTeam(); renderSchedule();
+    if (activeTab === 'standings') renderStandings();
+  }
+});
+
 renderHeader();
 renderMyTeam();
 renderSchedule();
@@ -429,6 +468,38 @@ function renderHeader() {
     document.getElementById('favTeamChips').innerHTML = '';
   }
   renderLastUpdated();
+  updatePageMeta();
+}
+
+// Updates <title> and JSON-LD to match the active tournament (and team, if set).
+// Called on every renderHeader() so tab/browser history stays meaningful.
+function updatePageMeta() {
+  const entry = MANIFEST.find((t) => t.id === activeTournamentId);
+  const tournamentName = (entry && entry.label) || TD.tournament || 'Splash Bracket';
+  document.title = favTeam
+    ? `${favTeam} — ${tournamentName} | Splash Bracket`
+    : `${tournamentName} | Splash Bracket`;
+
+  // Keep the canonical tag in sync with the /t/<id> URL syncInitialUrl()/selectTournament()
+  // just pushed -- otherwise it would still point at whichever tournament was canonical when
+  // the page first loaded, sending a stale signal to any crawler that renders the JS.
+  const canonicalEl = document.querySelector('link[rel="canonical"]');
+  if (canonicalEl && entry) canonicalEl.setAttribute('href', `https://splashbracket.com/t/${entry.id}`);
+
+  // JSON-LD SportsEvent — helps Google understand this page is about a specific tournament.
+  const ldEl = document.getElementById('jsonld-schema');
+  if (ldEl && entry) {
+    ldEl.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SportsEvent',
+      'name': tournamentName,
+      'sport': 'Water Polo',
+      'startDate': entry.start_date,
+      'url': `https://splashbracket.com/t/${entry.id}`,
+      'organizer': { '@type': 'Organization', 'name': 'US Club Water Polo' },
+      'keywords': 'water polo tournament, water polo bracket, water polo junior olympics, water polo JOs, JO qualifier, water polo futures, water polo futures finals, water polo futures superfinals, water polo quicksilver, water polo newport invite, water polo SPA, US Club Championships, youth water polo, club water polo, water polo standings, water polo live scores, water polo schedule, water polo results, 14U water polo, 16U water polo, 18U water polo, boys water polo tournament, girls water polo tournament, Southern California water polo, NorCal water polo, national water polo championship',
+    });
+  }
 }
 
 function renderLastUpdated() {
@@ -1223,6 +1294,8 @@ function selectTournament(id) {
   activeTournamentId = id;
   localStorage.setItem('activeTournamentId', id);
   TD = window.TOURNAMENTS[id];
+  // Update the URL so the browser back button works and the link is shareable.
+  history.pushState({ tournamentId: id }, '', `/t/${encodeURIComponent(id)}`);
   resolvedCache = {};
   if (favTeam && !TD.teams.some((t) => t.name === favTeam && t.division === favDiv)) {
     favTeam = null;
@@ -1340,5 +1413,23 @@ function abbrevLocation(loc) {
   return abbrevs[loc] || loc;
 }
 </script>
+
+<!-- SEO footer: visible to search crawlers; provides topic context that pure meta tags can't.
+     Kept visually minimal so it doesn't clutter the app UI. -->
+<footer style="padding:20px 16px 36px;border-top:1px solid #e5e7eb;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.7;">
+  <p style="font-weight:600;margin-bottom:6px;color:#374151;">About Splash Bracket</p>
+  <p>Splash Bracket provides live water polo tournament brackets, real-time scores, team schedules, pool standings, and projected placement for youth and club water polo events. Supported tournaments include:</p>
+  <ul style="margin:8px 0 8px 16px;list-style:disc;">
+    <li><strong>US Club Water Polo Championships</strong> (Boys &amp; Girls, all age groups)</li>
+    <li><strong>Futures Superfinals</strong> — US Club Water Polo Futures championship</li>
+    <li><strong>Junior Olympics (JOs)</strong> — USA Water Polo Junior Olympics &amp; JO qualifiers</li>
+    <li><strong>Quicksilver Tournament</strong> — annual water polo invitational</li>
+    <li><strong>Newport Invite</strong> — Newport Beach water polo invitational</li>
+    <li><strong>SPA (Southern Pacific Aquatics)</strong> water polo tournaments</li>
+    <li>Regional qualifiers, invitationals, and showcase events across California and the Western Zone</li>
+  </ul>
+  <p>Track 12U, 14U, 16U, and 18U boys and girls divisions. See your team's bracket path, round-robin standings, and final placement — updated live throughout each tournament.</p>
+  <p style="margin-top:8px;"><a href="https://splashbracket.com/" style="color:#1a56a8;text-decoration:none;">splashbracket.com</a></p>
+</footer>
 </body>
 </html>

@@ -10,8 +10,10 @@ tools
 package.json
 package-lock.json
 *.XLSX
+*.docx
 CLAUDE.md
 DESIGN_NOTES.md
+IOS_APP_PLAN.md
 TOURNAMENT_DATA_SPEC.md
 site-worker.js
 SplashBracketLogo.png

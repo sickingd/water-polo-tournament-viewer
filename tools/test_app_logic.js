@@ -38,6 +38,14 @@ function el(id) {
 }
 
 const store = new Map();
+// A fake <link rel="canonical"> so updatePageMeta()'s querySelector('link[rel="canonical"]')
+// has something to write to -- a plain object with just enough of the Element surface
+// (get/setAttribute) rather than a full FakeEl, since nothing else needs this one.
+const canonicalEl = {
+  _href: '',
+  setAttribute(name, v) { if (name === 'href') this._href = v; },
+  getAttribute(name) { return name === 'href' ? this._href : null; },
+};
 const sandbox = {
   console,
   localStorage: {
@@ -46,9 +54,12 @@ const sandbox = {
     removeItem: (k) => store.delete(k),
   },
   addEventListener: () => {},
+  location: { pathname: '/' },
+  history: { replaceState: () => {}, pushState: () => {} },
   document: {
     getElementById: (id) => el(id),
     querySelectorAll: () => [],
+    querySelector: (sel) => (sel === 'link[rel="canonical"]' ? canonicalEl : null),
   },
   setTimeout: () => {},
   setInterval: () => {},
@@ -259,6 +270,24 @@ check('selectBracket refreshes the Bracket tab immediately when it is active', e
 // Direct unit tests for the app's pure helper functions (called straight, not via DOM smoke).
 // ===========================================================================================
 const appFn = (name) => vm.runInContext(name, sandbox);
+
+// pickDefaultTournamentId: a /t/<id> URL should win over localStorage/default when the id is
+// real, and be silently ignored (falling back to normal behavior) when it's not -- a stale
+// bookmark or a typo'd share link must never crash or strand the user on a blank tournament.
+const pickDefaultTournamentId = appFn('pickDefaultTournamentId');
+sandbox.location.pathname = '/t/2026-boys-futures-superfinals';
+check('pickDefaultTournamentId honors a valid /t/<id> URL', pickDefaultTournamentId() === '2026-boys-futures-superfinals');
+sandbox.location.pathname = '/t/not-a-real-tournament';
+check('pickDefaultTournamentId ignores an unknown /t/<id> and falls back normally', pickDefaultTournamentId() !== 'not-a-real-tournament');
+sandbox.location.pathname = '/';
+
+// updatePageMeta keeps the canonical <link> in sync with whichever tournament is active --
+// otherwise a crawler that renders the JS after a client-side switch sees a stale canonical
+// still pointing at the tournament that was active on first load.
+vm.runInContext("selectTournament('2026-boys-futures-superfinals')", sandbox);
+check('updatePageMeta updates the canonical link to the active tournament\'s /t/<id> URL',
+  canonicalEl._href === 'https://splashbracket.com/t/2026-boys-futures-superfinals');
+vm.runInContext("selectTournament('2026-girls-us-club-championships')", sandbox);
 
 // shortGameId strips the division prefix to just the per-game number. For the Boys
 // "{age}{B}D{div}{num}" id shape the division digit is part of the prefix and is dropped too

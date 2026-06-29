@@ -32,7 +32,9 @@ const sandbox = {
   console,
   localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
   addEventListener: () => {},
-  document: { getElementById: (id) => { if (!elements.has(id)) elements.set(id, new FakeEl()); return elements.get(id); }, querySelectorAll: () => [] },
+  location: { pathname: '/' },
+  history: { replaceState: () => {}, pushState: () => {} },
+  document: { getElementById: (id) => { if (!elements.has(id)) elements.set(id, new FakeEl()); return elements.get(id); }, querySelectorAll: () => [], querySelector: () => null },
   setTimeout: () => {}, setInterval: () => {},
 };
 sandbox.global = sandbox; sandbox.globalThis = sandbox; sandbox.window = sandbox;

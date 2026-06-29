@@ -1,121 +1,98 @@
-# Water Polo Tournament Viewer — Project Handoff
+# Splash Bracket — Project Handoff (CLAUDE.md)
 
-This file is auto-loaded by Claude Code. It captures everything known about the project so work can
-continue in VS Code.
+Auto-loaded by Claude Code. Captures the current architecture so work can continue in VS Code.
+**This file was refreshed 2026-06-28** to match the deployed product; earlier versions described an
+old single-file prototype and are obsolete.
 
-## Goal
+## What this is
 
-Turn a hard-to-read tournament workbook into a simple, team-centric viewer. A user picks their team and
-sees: their games (times/dates/locations), results, division standings, and — the real prize — the
-**routes and options for future games** and **where the team can place** given the bracket and current
-results.
+Splash Bracket is a **live, deployed** team-centric water polo tournament viewer at
+**splashbracket.com** (`clubwaterpolo.com` 302-redirects over to it). A user picks a tournament, then
+their team, and sees: their games (times/dates/locations), live results, division standings, **projected
+future opponents and routes**, and **where the team can place** given the bracket and current results.
+The "future routes + placement" feature that the original spec called the real prize is **built** (see
+the resolver, below).
 
-## Files in this folder
+## Architecture (three deployables, one repo)
 
-| File | What it is |
+1. **Static-site Worker — `clubwaterpolo-site`** (`site-worker.js` + `wrangler.toml`). Cloudflare
+   Workers Static Assets serving the repo. Redirects the old host to splashbracket.com and rewrites
+   `/` → `/tournament_app`. `run_worker_first = true` so the redirect logic runs before asset serving.
+2. **Live-data Worker — `clubwaterpolo-live`** (`worker/` + `worker/wrangler.toml`). Bound to
+   `*/api/*`. A **staggered cron** (two patterns, every 6 min offset by 3 → ~3-min effective) polls each
+   non-`completed` tournament, normalizes it, and writes to **KV** (`TOURNAMENT_KV`). `fetch()` serves
+   `GET /api/tournaments/<id>` from KV and `POST /api/tournaments/<id>?refresh=now` for on-demand refresh.
+3. **The app — `tournament_app.html`** (single self-contained file: CSS + vanilla JS). Loads baseline
+   `data/<id>.js` + `data/manifest.js` at page load, then **polls `GET /api/tournaments/<id>`**
+   (`cache: no-store`) for live updates. No build step, no framework.
+
+**Data flow:** OneDrive/Google sheet → (cron) `clubwaterpolo-live` Worker normalizes → KV → app fetches
+`/api/...` → `src/resolver.js` computes standings/brackets/placement client-side → render functions
+draw the UI.
+
+## Repo layout
+
+| Path | What it is |
 |------|-----------|
-| `2026 GIRLS FUTURES SUPERFINALS.XLSX` | Source workbook. Multiple divisions in one file. The hard-to-read input. |
-| `TOURNAMENT_DATA_SPEC.md` | **Read this first.** Reverse-engineered spec of the workbook: schema, game-ID convention, slot-reference grammar, the 24-team bracket flow, standings rules, the resolver algorithm, and gotchas. The authority for any new work. |
-| `tournament_app.html` | Working prototype. Single self-contained file: embedded data (`const TD = {...}`), CSS, and vanilla-JS render functions. Mobile-style team viewer with tabs: My Team / Standings / Full Schedule + a team picker. |
-| `DESIGN_NOTES.md` | Last session's change log + the proposed next-iteration plan (same plan is in §"Implementation plan" below). |
-| `CLAUDE.md` | This handoff. |
+| `tournament_app.html` | The app. ~1,300 lines: render layer + an inline copy of resolver usage. Loaded for `/`. |
+| `src/resolver.js` | **The brain.** Generic bracket resolver (~1,500 lines). Pure, UI-agnostic, runs client-side. Public API: `window.Resolver = { resolveDivision, buildScenarios, buildAllPossibleGames, groupEntrants, parseToken, localNumber }`. |
+| `data/manifest.js` | `window.TOURNAMENT_MANIFEST` — list of tournaments + `current`/`completed` status. |
+| `data/<id>.js` | Per-tournament baseline snapshot: `window.TOURNAMENTS[id] = { tournament, generated, games:[...] }`. Each game: `date,time,location,game_id,white,white_score,dark,dark_score,round,division,played`. WHITE/DARK hold **slot tokens** like `A1-NEWPORT BEACH A`, `2ndB-REGENCY`, `W#Cross1`. |
+| `worker/index.js` | Live-data Worker: `scheduled()` (cron refresh) + `fetch()` (API). CSV-parsing mirrors `tools/refresh_data.py`. |
+| `worker/onedrive.js` | OneDrive `.xlsx` fallback source (unzip + XML parse) for sheets not on Google. |
+| `tools/sources.json` | Per-tournament source config: Google `sheet_id`(s) per division, OneDrive fallback, `cron_group` (A/B → which cron pattern handles it), `status`. |
+| `tools/refresh_data.py` | Local/CI data refresh; regenerates `data/<id>.js`. Skips `completed` tournaments. |
+| `tools/run_tests.js` | `npm test` entry point; runs the suite below in isolated child processes. |
+| `tools/test_resolver.js` | Resolver unit + regression tests (hand-built fixtures). |
+| `tools/test_app_logic.js` | App render-layer logic (resolver + inline `<script>`, DOM stubbed). |
+| `tools/test_data_invariants.js` | Brute-force sweep over all committed data: no throw / no stray TBD / no inverted placement range. |
+| `tools/test_golden.js` | Value-lock snapshots of the two frozen/completed tournaments (`tools/golden/*.json`). Update with `npm run test:golden:update`. |
+| `.github/workflows/refresh-data.yml` | Hourly **durable snapshot** to git (NOT the live mechanism — the Worker is). Commits `data/` changes. |
+| `_headers` | Cloudflare `Cache-Control: no-cache` catch-all (GitHub Pages' fixed 10-min cache was the original staleness bug). |
+| `.assetsignore` | Excludes non-public files from the static-assets upload. |
+| `index.html` | Meta-refresh stub to `tournament_app.html` (the Worker normally serves `/` directly). |
+| `TOURNAMENT_DATA_SPEC.md` | Reverse-engineered spec of the workbook + slot-token grammar. Still the authority for token meaning. |
+| `IOS_APP_PLAN.md` | Plan for an iPhone app (Capacitor wrapper) + native-feature evaluation. Written against this stack. |
+| `DESIGN_NOTES.md` | Older change log (the division-keying bug fix). |
 
-## How the prototype works
+## The app layer (`tournament_app.html`)
 
-`tournament_app.html` is one file. The data is **pre-exported** from the spreadsheet into a JS object
-on line ~182:
+Multi-tournament, multi-sport (boys/girls × Futures / US Club Championships). Key functions:
+`pickDefaultTournamentId`, `getResolved(division)` (memoized `Resolver.resolveDivision` call),
+`renderMyTeam` / `renderStandings` / `renderSchedule`, `possibleGamesSectionHTML` + `scenarioBranchHTML`
+(the projected-routes view), `placementTrackerHTML` / `finalPlacementFor` (placement floor/ceiling),
+`pollLiveData` (the `/api` poll), and three pickers (tournament / bracket-division / team). State
+(`favTeam`, `favDiv`, active tournament) lives in `localStorage`. Has Google Analytics (`gtag`/`track`)
+and a `followedTeam` user property.
 
-```js
-const TD = {
-  tournament: "...",
-  generated: "ISO timestamp",
-  games: [ { date, time, location, game_id, white, white_score, dark, dark_score, round, division, played }, ... ],
-  teams: [ { name, division }, ... ]
-}
-```
+## Build / deploy / test
 
-- ~416 games, 135 teams, 8 divisions: `{12U,14U,16U,18U}_GIRLS_{D1,D2}`.
-- `game_id` encodes age+division: `16GD133` = 16U Girls D1, game 33. (See spec §3.)
-- `round` is the raw COMMENTS descriptor, e.g. `"B bracket B1,B3"` (pool), `"Cross2 10v15"`, `"QF1"`.
-- `played` is true only when both scores are present.
-- Render functions: `renderMyTeam()`, `renderStandings()`, `renderSchedule()`, `gameCardHTML()`,
-  `renderPickerList()` / `selectTeam()`. State is `favTeam` + `favDiv` in `localStorage`.
+- **Install once:** `npm install`. **Test:** `npm test`. **Deploy:** `npm run deploy` (site + worker),
+  or `deploy:site` / `deploy:worker` individually. Requires `wrangler` auth to the Cloudflare account.
+- Domains live on Cloudflare zones `splashbracket.com` and `clubwaterpolo.com`.
+- **Hosting is the Cloudflare Free plan** — it has real per-invocation CPU limits. The staggered cron
+  and "one tournament per invocation" design exist *because* a single combined tick exceeded the limit
+  and silently failed. Keep new per-tick work cheap, or move it off the cron (e.g. Cloudflare Queues).
 
-**Important:** bracket games in `TD.games` store whatever team name was cached in the sheet at export
-time. The app does **not** compute advancement itself yet — unresolved slots show as raw tokens.
+## Critical domain facts & gotchas
 
-## Critical domain fact: teams are keyed by (name + division), never name alone
+- **Teams are keyed by (name + division), never name alone.** Many team names recur across divisions
+  (e.g. LAMORINDA A in three). Every filter/lookup/standings map must include the division. This was a
+  real bug that's been fixed — don't reintroduce it.
+- **Order games by time/SORTKEY, never by GAME#** — game numbers interleave brackets and days. The app
+  parses 12h time to minutes (`gameTS`).
+- **Standings use round-robin (pool) games only**, and strip `^[A-H]\d-` group prefixes — bracket slot
+  refs (`2ndB-REGENCY`, `W#Cross1`) must never create standings rows.
+- **Slot tokens are the source of truth** for bracket topology; the resolver parses them generically
+  (no hardcoded per-division-size flow). When a token already carries a cached `-{TEAM}` suffix, trust
+  it; only walk the reference graph for bare tokens, and only project a *future* opponent when it's
+  structurally unambiguous (else show "Winner of QF1").
+- **Don't trust cached formula values** from the sheet blindly; recompute from raw scores.
+- **Tiebreakers** (H2H → goal diff → goals against) should still be confirmed against the sheet's
+  `RULES & GIRLS LINKS` for 3-way ties — see `TOURNAMENT_DATA_SPEC.md` §6.
 
-**42 of 135 team names appear in more than one division.** `LAMORINDA A` is in 12U_D1, 14U_D1, and
-16U_D1; `SANTA BARBARA`, `RANCHO TSUNAMI`, `SAN DIEGO SHORES`, `SOUTH COAST` each span three. Any
-filter, lookup, standings map, or dedupe MUST include the division (or `game_id` prefix). Keying by
-bare name is the bug that was just fixed — don't reintroduce it.
+## Adding a new tournament
 
-## Bugs fixed last session (already in `tournament_app.html`)
-
-1. **My Team division-scoped** — `renderMyTeam()` filters on `g.division === favDiv` AND team name
-   (was name only, which mixed divisions).
-2. **Highlight division-aware** — `gameCardHTML()` only stars a game as "yours" when `g.division === favDiv`.
-3. **Standings round-robin-only + A–H prefix strip** — standings use only pool games
-   (`/bracket/i.test(g.round)`) and strip `^[A-H]\d-` (was `^[A-D]\d-`), so bracket slot-refs
-   (`2ndB-REGENCY`, `W#Cross1`) no longer create junk rows. 16U_D1 → exactly 24 clean teams.
-4. **Chronological sort** — `gameTS(g)` parses 12h time into minutes; replaced the string sort that
-   put "10:00 AM" before "8:00 AM". Spec rule: order by time/SORTKEY, never by GAME#.
-
-## Implementation plan (next iteration — not yet built)
-
-The pre-resolved data is the ceiling on what the prototype can do. Delivering "future routes + placement"
-needs a **resolver** that recomputes the bracket from raw scores (spec §4, §6, §9). Build order:
-
-1. **Slot-reference resolver (start here).** Parse each `white`/`dark` token into a typed reference:
-   - `{group}{pos}-{TEAM}` round-robin entries (groups A–H, pos 1–3)
-   - `{ord}{group}` group-finish refs (`1stB`, `2ndE`)
-   - `W#/L#{round}` bracket progress (`W#Cross1`, `L#QF3`, `W#Semi1`)
-   - `{LET}{n}({source})` + `W#/L#{LET}a/b` placement refs (LET ∈ J,K,M,N,P)
-
-   Then: resolve round-robin games → compute group standings (spec §6; **verify tiebreakers against the
-   `RULES & GIRLS LINKS` sheet** — currently assumed H2H → goal diff → goals against) → iterate the
-   bracket in dependency order to a fixpoint. A ref resolves to a real team only when its feeder game is
-   `final`; otherwise keep the token.
-
-2. **Projected vs. locked opponents.** In the UI, show "Winner of Cross1" until that game finalizes,
-   then the actual team. This is the headline feature — a team's path is visible before games happen.
-
-3. **Floor/ceiling placement (spec §5).** From group finish, bound the places a team can still get
-   (e.g. top-group runner-up = 1st–12th) and tighten it as results come in.
-
-4. **Generic bracket flow.** The explicit 24-team map (16U_D1, 18U_D1) in spec §5 is only correct for
-   24-team divisions. 10/14/15/17/18/20/21-team divisions differ — parse flow from COMMENTS + slot refs
-   generically rather than hardcoding. Needed for full multi-division support.
-
-5. **Live data (optional).** Workbook links to a Google Sheet. A live build polls its CSV export on the
-   same 11-column schema and re-runs the resolver. Treat a missing score as "branch not locked," not an error.
-
-### Test fixture (use to validate the resolver)
-
-Spec §10 — Regency, 16U_GIRLS_D1:
-- Day-1 results make Regency **2ndB**, entering at **Playin3** (`16GD133`, Sat 12:00 PM).
-- Playin3 opponent = `W#Cross1` = winner of (`3rdA-680` vs `1stH-DIABLO ALLIANCE`).
-- Win Playin3 → QF1 (`16GD141`) vs `1stD` = Patriot. Guaranteed final placement: 1st–12th.
-
-### Data-extraction note (if regenerating `TD` from the .xlsx)
-
-Use the `MASTER BY DIVISION` or `MASTER BY TIME` sheet (11 columns incl. SORTKEY). Key off **header-row
-text**, not fixed column indices (columns can shift). Recompute from raw scores; don't trust cached
-formula values (`data_only=True` may be stale). Ignore `CHICLETS OLD` (stale venues). See spec §2, §8, §11.
-
-## Suggested architecture if rebuilding beyond a single HTML file
-
-The current single-file app is fine for a prototype. If it grows, separate concerns:
-`data/` (the `TD` export + a refresh script), `src/resolver.js` (pure functions: parse → standings →
-bracket fixpoint → placement bounds; fully unit-testable against the Regency fixture), and `src/ui/`
-(render layer). Keep the resolver UI-agnostic so it can be tested headless.
-
-## Conventions / gotchas (from spec §11)
-
-- Order by time/SORTKEY, **never GAME#** (numbers interleave brackets and days).
-- COMMENTS formatting is inconsistent (`13-16` vs `9th-12th`, seed-shorthand `10v15`); parse leniently
-  and treat the structured `W#/L#/{ord}{group}` tokens as source of truth.
-- Two unentered Friday 7 PM games (`16GD123`, `16GD124`) leave groups C and G partially unresolved — the
-  resolver must tolerate partial standings.
-- Flow differs by division size — don't hardcode the 24-team map for other sizes.
+Add an entry to `tools/sources.json` (sheet IDs / OneDrive fallback / `cron_group` / `status`), run
+`tools/refresh_data.py` to generate `data/<id>.js`, list it in `data/manifest.js`, and add a matching
+`<script src="data/<id>.js">` tag in `tournament_app.html`.
