@@ -297,6 +297,27 @@ const ztPlacements = appFn('allFinalPlacements')(ztResolved, 6);
 check('allFinalPlacements reads an absolute "3rd 3v4" decider (winner 3rd, loser 4th)', ztPlacements.get('THIRDWIN') === 3 && ztPlacements.get('THIRDLOSE') === 4);
 check('allFinalPlacements does NOT treat a group-relative "3rd/4thB" as an absolute place', ztPlacements.get('RELWIN') === undefined && ztPlacements.get('RELLOSE') === undefined);
 
+// A sibling band labeled "1-3 RR" but still missing one game must still reserve places 1-3 --
+// otherwise the leftover-gap inference below would (wrongly) see 5 open slots instead of 2 and
+// refuse to place the unlabeled "Y bracket" pair at all. Regression test for a real bug: 12U
+// Girls' bottom 5-team bracket carried no "7-11 RR" label, and its sibling "1-3 RR" band still
+// had one pending game, so every team in the unlabeled bracket showed a flat "TBD" even though
+// 3 of the 5 had already played every game they'd ever play.
+vm.runInContext(`
+  TD.games.push(
+    { date: 'd', time: '8:00 AM', location: 'X', game_id: 'ZU1', white: 'X1-NEWPORTX', white_score: 10, dark: 'X3-DELMARX', dark_score: 2, round: '1-3 RR', division: 'ZU', played: true },
+    { date: 'd', time: '9:00 AM', location: 'X', game_id: 'ZU2', white: 'X2-LAMORINDAX', white_score: 9, dark: 'X3-DELMARX', dark_score: 3, round: '1-3 RR', division: 'ZU', played: true },
+    { date: 'd', time: '10:00 AM', location: 'X', game_id: 'ZU3', white: 'X1-NEWPORTX', white_score: null, dark: 'X2-LAMORINDAX', dark_score: null, round: '1-3 RR', division: 'ZU', played: false },
+    { date: 'd', time: '8:00 AM', location: 'X', game_id: 'ZU4', white: 'Y1-TEAMY1', white_score: 6, dark: 'Y2-TEAMY2', dark_score: 4, round: 'Y bracket', division: 'ZU', played: true }
+  );
+  ['NEWPORTX','LAMORINDAX','DELMARX','TEAMY1','TEAMY2'].forEach((n) => TD.teams.push({ name: n, division: 'ZU' }));
+  resolvedCache = {};
+`, sandbox);
+const zuResolved = vm.runInContext("getResolved('ZU')", sandbox);
+const zuPlacements = appFn('allFinalPlacements')(zuResolved, 5);
+check('allFinalPlacements infers an unlabeled terminal band from a labeled-but-pending sibling', zuPlacements.get('TEAMY1') === 4 && zuPlacements.get('TEAMY2') === 5);
+check('allFinalPlacements leaves the genuinely undecided sibling band unresolved', !zuPlacements.has('NEWPORTX') && !zuPlacements.has('LAMORINDAX') && !zuPlacements.has('DELMARX'));
+
 // Placement Tracker sort order: best reachable place (ceiling) leads; ties on the range break
 // on record, then goal differential. HIGH/HIGH2 are still in pool (can reach 1st) so they lead
 // the three "5-7 RR" teams (capped at 5th); among those three, KONE's 2-0 record sorts it ahead.

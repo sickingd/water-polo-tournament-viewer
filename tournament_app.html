@@ -816,21 +816,32 @@ function allFinalPlacements(resolved, totalTeams) {
 
   const standingsKeys = Object.keys(resolved.standings);
   const completeGroups = standingsKeys
-    .map((let_) => resolved.standings[let_])
-    .filter((group) => group.complete && group.games.length);
+    .map((let_) => ({ let_, group: resolved.standings[let_] }))
+    .filter(({ group }) => group.complete && group.games.length);
 
   // First pass: groups with an explicit, trustworthy range -- either a literal "17-20 RR"/
   // "21-24 RR" label in the game's own COMMENTS (placement round robins don't have one
   // deciding game; the final rank comes from the mini-bracket's own standings), or a flat
   // round robin with no elimination bracket at all (e.g. 10U_COED) whose one group already
-  // contains every team in the division, so rank directly IS the final placement.
-  completeGroups.forEach((group) => {
+  // contains every team in the division, so rank directly IS the final placement. Failing
+  // both of those, fall back to the resolver's own structural inference of an unlabeled
+  // terminal band (e.g. a plain "G bracket" that's really places 7-11) -- it reasons from
+  // every OTHER group's label/feeder structure, not from what's already been *decided* here,
+  // so it still works even while a labeled sibling band (e.g. "1-3 RR") has a game left to
+  // play -- the naive "gap = whatever isn't claimed in `known` yet" trick below can't see
+  // that reserved-but-pending band and infers a gap too wide to match this group exactly.
+  completeGroups.forEach(({ let_, group }) => {
     const rangeMatch = /^(\d+)\s*-\s*(\d+)\s*RR/i.exec((group.games[0].raw.round || '').trim());
     if (rangeMatch) {
       const start = parseInt(rangeMatch[1], 10);
       group.ranked.forEach((r, idx) => known.set(r.name, start + idx));
     } else if (totalTeams && group.ranked.length === totalTeams) {
       group.ranked.forEach((r, idx) => known.set(r.name, idx + 1));
+    } else if (totalTeams) {
+      const inferred = Resolver.inferUnlabeledTerminalRange(resolved.ctx, let_, totalTeams);
+      if (inferred && inferred[1] - inferred[0] + 1 === group.ranked.length) {
+        group.ranked.forEach((r, idx) => known.set(r.name, inferred[0] + idx));
+      }
     }
   });
 
@@ -841,8 +852,9 @@ function allFinalPlacements(resolved, totalTeams) {
   // sheet left COMMENTS blank for every one of its games (the spreadsheet's legend area did
   // label it, but with a stale/inconsistent range for this field size -- "G 9-13 RR" in an
   // 11-team division, confirmed wrong) -- so it's deliberately NOT trusted here either.
-  const unlabeledGroups = completeGroups.filter((group) =>
-    group.ranked.length && !group.ranked.some((r) => known.has(r.name)));
+  const unlabeledGroups = completeGroups
+    .map(({ group }) => group)
+    .filter((group) => group.ranked.length && !group.ranked.some((r) => known.has(r.name)));
 
   // It can still be pinned down if it's the ONLY thing left unresolved: whatever places
   // 1..totalTeams aren't already claimed above must belong to it, in rank order -- but only

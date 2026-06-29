@@ -1567,5 +1567,5 @@
     return results;
   }
 
-  global.Resolver = { resolveDivision, buildScenarios, buildAllPossibleGames, groupEntrants, parseToken, localNumber };
+  global.Resolver = { resolveDivision, buildScenarios, buildAllPossibleGames, groupEntrants, parseToken, localNumber, inferUnlabeledTerminalRange };
 })(typeof window !== 'undefined' ? window : globalThis);
