@@ -395,6 +395,32 @@ function isWithinActiveHours(date, fallbackCfg) {
   return hour >= start && hour < end;
 }
 
+// Records the outcome of every actual OneDrive attempt (not the skipped "not due yet" ticks)
+// under its own KV key, separate from the tournament's data blob -- a `wrangler tail` session
+// only ever catches a failure if someone happens to be watching at that exact moment (see the
+// [observability] comment in wrangler.toml), so the only way to confirm *after the fact* that
+// the bracket went stale because OneDrive's anti-bot-sensitive flow (see onedrive.js) was
+// blocking every attempt for hours, rather than the cron simply not firing, was a live tail
+// session that already expired by the time anyone asked -- a real incident, not hypothetical.
+// A plain `wrangler kv key get "<id>:onedrive_health"` now answers that without needing
+// dashboard/API log access at all.
+async function recordOneDriveHealth(tournamentId, env, ok, errorMessage) {
+  const healthKey = `${tournamentId}:onedrive_health`;
+  const prevRaw = await env.TOURNAMENT_KV.get(healthKey);
+  const prev = prevRaw ? JSON.parse(prevRaw) : { consecutiveFailures: 0, lastError: null, lastAttempt: null, lastSuccess: null };
+  const now = new Date().toISOString();
+  const next = ok
+    ? { consecutiveFailures: 0, lastError: null, lastAttempt: now, lastSuccess: now }
+    : { consecutiveFailures: prev.consecutiveFailures + 1, lastError: errorMessage, lastAttempt: now, lastSuccess: prev.lastSuccess };
+  await env.TOURNAMENT_KV.put(healthKey, JSON.stringify(next));
+  // Loud, greppable marker every ~hour of continuous failure (4 attempts at the 15-minute
+  // poll boundary) -- if anyone IS tailing live during a stuck stretch, this is unmissable
+  // instead of looking like the same one-line "failed" log repeating.
+  if (!ok && next.consecutiveFailures % 4 === 0) {
+    console.error(`[${tournamentId}] OneDrive has now failed ${next.consecutiveFailures} consecutive attempts (~${Math.round(next.consecutiveFailures * 15 / 60)}h) -- last error: ${errorMessage}`);
+  }
+}
+
 // For a tournament whose organizers have stopped updating Google Sheets entirely (confirmed
 // for the 2026 Boys Futures Superfinals -- the Google doc just sits there unplayed while the
 // OneDrive workbook gets real scores), checking Google on every tick is pure waste: it costs
@@ -411,15 +437,21 @@ async function handleScheduledTickOneDriveOnly(tournamentId, cfg, env, opts) {
     console.log(`[${tournamentId}] OneDrive-only, not due for a re-poll yet`);
     return;
   }
-  const cachedRaw = await env.TOURNAMENT_KV.get(tournamentId);
-  const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
-  const data = await refreshTournamentFromOneDrive(cfg, fb, extractTeamName, parseScore);
-  if (sameData(cached, data)) {
-    console.log(`[${tournamentId}] OneDrive-only checked, no change (${data.games.length} games)`);
-    return;
+  try {
+    const cachedRaw = await env.TOURNAMENT_KV.get(tournamentId);
+    const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
+    const data = await refreshTournamentFromOneDrive(cfg, fb, extractTeamName, parseScore);
+    await recordOneDriveHealth(tournamentId, env, true);
+    if (sameData(cached, data)) {
+      console.log(`[${tournamentId}] OneDrive-only checked, no change (${data.games.length} games)`);
+      return;
+    }
+    await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(data));
+    console.log(`[${tournamentId}] OneDrive-only updated (${data.games.length} games)`);
+  } catch (e) {
+    await recordOneDriveHealth(tournamentId, env, false, String(e.message || e));
+    throw e;
   }
-  await env.TOURNAMENT_KV.put(tournamentId, JSON.stringify(data));
-  console.log(`[${tournamentId}] OneDrive-only updated (${data.games.length} games)`);
 }
 
 // Google Sheets is always primary. A tournament only ever gets here (cfg.fallback present)
